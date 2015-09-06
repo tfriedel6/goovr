@@ -1,8 +1,8 @@
-#include "OVR_CAPI_0_6_0.h"
+#include "OVR_CAPI_0_7_0.h"
 
 void logCallback(int level, const char *message);
 
-int logCallback_cgo(int level, const char* message) {
+int logCallback_cgo(uintptr_t userData, int level, const char* message) {
     logCallback(level, message);
     return 0;
 }

@@ -6,7 +6,7 @@ package goovr
 #include <stdlib.h>
 #include "OVR_CAPI.h"
 
-int logCallback_cgo(int level, const char* message);
+int logCallback_cgo(uintptr_t userData, int level, const char* message);
 */
 import "C"
 import (
@@ -130,6 +130,16 @@ type PoseStatef struct {
 	TimeInSeconds       float64
 }
 
+func goPoseStatef(v C.ovrPoseStatef) PoseStatef {
+	return PoseStatef{
+		ThePose:             goPosef(v.ThePose),
+		AngularVelocity:     goVector3f(v.AngularVelocity),
+		LinearVelocity:      goVector3f(v.LinearVelocity),
+		AngularAcceleration: goVector3f(v.AngularAcceleration),
+		LinearAcceleration:  goVector3f(v.LinearAcceleration),
+		TimeInSeconds:       float64(v.TimeInSeconds)}
+}
+
 // Describes the up, down, left, and right angles of the field of view.
 //
 // Field Of View (FOV) tangent of the angle units.
@@ -155,31 +165,29 @@ func cFovPort(v FovPort) C.ovrFovPort {
 type HmdType int32
 
 const (
-	Hmd_None      HmdType = C.ovrHmd_None
-	Hmd_DK1               = C.ovrHmd_DK1
-	Hmd_DKHD              = C.ovrHmd_DKHD
-	Hmd_DK2               = C.ovrHmd_DK2
-	Hmd_BlackStar         = C.ovrHmd_BlackStar
-	Hmd_CB                = C.ovrHmd_CB
-	Hmd_Other             = C.ovrHmd_Other
+	Hmd_None    HmdType = C.ovrHmd_None
+	Hmd_DK1             = C.ovrHmd_DK1
+	Hmd_DKHD            = C.ovrHmd_DKHD
+	Hmd_DK2             = C.ovrHmd_DK2
+	Hmd_CB              = C.ovrHmd_CB
+	Hmd_Other           = C.ovrHmd_Other
+	Hmd_E3_2015         = C.ovrHmd_E3_2015
+	Hmd_ES06            = C.ovrHmd_ES06
 )
 
 // HMD capability bits reported by device.
 //
-// Set <B>(read/write)</B> flags through ovrHmd_SetEnabledCaps()
+// Set <B>(read/write)</B> flags through ovr_SetEnabledCaps()
 type HmdCaps int32
 
 const (
-	HmdCap_DebugDevice       HmdCaps = C.ovrHmdCap_DebugDevice
-	HmdCap_LowPersistence            = C.ovrHmdCap_LowPersistence
-	HmdCap_DynamicPrediction         = C.ovrHmdCap_DynamicPrediction
-	HmdCap_NoVSync                   = C.ovrHmdCap_NoVSync
-	HmdCap_Writable_Mask             = C.ovrHmdCap_Writable_Mask
-	HmdCap_Service_Mask              = C.ovrHmdCap_Service_Mask
+	HmdCap_DebugDevice   HmdCaps = C.ovrHmdCap_DebugDevice
+	HmdCap_Writable_Mask         = C.ovrHmdCap_Writable_Mask
+	HmdCap_Service_Mask          = C.ovrHmdCap_Service_Mask
 )
 
 // Tracking capability bits reported by the device.
-// Used with ovrHmd_ConfigureTracking.
+// Used with ovr_ConfigureTracking.
 type TrackingCaps int32
 
 const (
@@ -200,10 +208,14 @@ const (
 	Eye_Count         = C.ovrEye_Count
 )
 
+type GraphicsLuid struct {
+	Reserved [8]byte
+}
+
+
 // This is a complete descriptor of the HMD.
 type Hmd struct {
 	cHmd                       C.ovrHmd
-	Handle                     unsafe.Pointer
 	Type                       HmdType
 	ProductName                string
 	Manufacturer               string
@@ -216,21 +228,22 @@ type Hmd struct {
 	CameraFrustumVFovInRadians float32
 	CameraFrustumNearZInMeters float32
 	CameraFrustumFarZInMeters  float32
-	HmdCaps                    HmdCaps
-	TrackingCaps               TrackingCaps
+	AvailableHmdCaps           HmdCaps
+	DefaultHmdCaps             HmdCaps
+	AvailableTrackingCaps      TrackingCaps
+	DefaultTrackingCaps        TrackingCaps
 	DefaultEyeFov              [Eye_Count]FovPort
 	MaxEyeFov                  [Eye_Count]FovPort
-	EyeRenderOrder             [Eye_Count]EyeType
 	Resolution                 Sizei
 }
 
-func goHmd(cHmd C.ovrHmd) *Hmd {
+func goHmd(cHmdV C.ovrHmd) *Hmd {
+	cHmd := C.ovr_GetHmdDesc(cHmdV )
 	var serialNumber [24]byte
 	for i := 0; i < 24; i++ {
 		serialNumber[i] = byte(cHmd.SerialNumber[i])
 	}
 	var defaultEyeFov, maxEyeFov [Eye_Count]FovPort
-	var eyeRenderOrder [Eye_Count]EyeType
 	for i := 0; i < Eye_Count; i++ {
 		defaultEyeFov[i] = FovPort{
 			UpTan:    float32(cHmd.DefaultEyeFov[i].UpTan),
@@ -242,15 +255,13 @@ func goHmd(cHmd C.ovrHmd) *Hmd {
 			DownTan:  float32(cHmd.MaxEyeFov[i].DownTan),
 			LeftTan:  float32(cHmd.MaxEyeFov[i].LeftTan),
 			RightTan: float32(cHmd.MaxEyeFov[i].RightTan)}
-		eyeRenderOrder[i] = EyeType(cHmd.EyeRenderOrder[i])
 	}
 
 	return &Hmd{
-		cHmd:                       cHmd,
-		Handle:                     unsafe.Pointer(cHmd.Handle),
+		cHmd:                       cHmdV,
 		Type:                       HmdType(cHmd.Type),
-		ProductName:                C.GoString(cHmd.ProductName),
-		Manufacturer:               C.GoString(cHmd.Manufacturer),
+		ProductName:                C.GoString(&cHmd.ProductName[0]),
+		Manufacturer:               C.GoString(&cHmd.Manufacturer[0]),
 		VendorId:                   int16(cHmd.VendorId),
 		ProductId:                  int16(cHmd.ProductId),
 		SerialNumber:               serialNumber,
@@ -260,11 +271,12 @@ func goHmd(cHmd C.ovrHmd) *Hmd {
 		CameraFrustumVFovInRadians: float32(cHmd.CameraFrustumVFovInRadians),
 		CameraFrustumNearZInMeters: float32(cHmd.CameraFrustumNearZInMeters),
 		CameraFrustumFarZInMeters:  float32(cHmd.CameraFrustumFarZInMeters),
-		HmdCaps:                    HmdCaps(cHmd.HmdCaps),
-		TrackingCaps:               TrackingCaps(cHmd.TrackingCaps),
+		AvailableHmdCaps:           HmdCaps(cHmd.AvailableHmdCaps),
+		DefaultHmdCaps:             HmdCaps(cHmd.DefaultHmdCaps),
+		AvailableTrackingCaps:      TrackingCaps(cHmd.AvailableTrackingCaps),
+		DefaultTrackingCaps:        TrackingCaps(cHmd.DefaultTrackingCaps),
 		DefaultEyeFov:              defaultEyeFov,
 		MaxEyeFov:                  maxEyeFov,
-		EyeRenderOrder:             eyeRenderOrder,
 		Resolution:                 goSizei(cHmd.Resolution)}
 }
 
@@ -295,29 +307,48 @@ type SensorData struct {
 }
 
 // Tracking state at a given absolute time (describes predicted HMD pose, etc.).
-// Returned by ovrHmd_GetTrackingState.
+// Returned by ovr_GetTrackingState.
 //
-// \see ovrHmd_GetTrackingState
+// \see ovr_GetTrackingState
 type TrackingState struct {
-	HeadPose               PoseStatef
-	CameraPose             Posef
-	LeveledCameraPose      Posef
-	RawSensorData          SensorData
-	StatusFlags            StatusBits
+	// Predicted head pose (and derivatives) at the requested absolute time.
+	// The look-ahead interval is equal to (HeadPose.TimeInSeconds - RawSensorData.TimeInSeconds).
+	HeadPose PoseStatef
+
+	// Current pose of the external camera (if present).
+	// This pose includes camera tilt (roll and pitch). For a leveled coordinate
+	// system use LeveledCameraPose.
+	CameraPose Posef
+
+	// Camera frame aligned with gravity.
+	// This value includes position and yaw of the camera, but not roll and pitch.
+	// It can be used as a reference point to render real-world objects in the correct location.
+	LeveledCameraPose Posef
+
+	// The most recent calculated pose for each hand when hand controller tracking is present.
+	// HandPoses[ovrHand_Left] refers to the left hand and HandPoses[ovrHand_Right] to the right hand.
+	// These values can be combined with ovrInputState for complete hand controller information.
+	HandPoses [2]PoseStatef
+
+	// The most recent sensor data received from the HMD.
+	RawSensorData SensorData
+
+	// Tracking status described by ovrStatusBits.
+	StatusFlags StatusBits
+
+	// Tags the vision processing results to a certain frame counter number.
 	LastCameraFrameCounter uint32
 }
 
 func goTrackingState(v C.ovrTrackingState) TrackingState {
 	return TrackingState{
-		HeadPose: PoseStatef{
-			ThePose:             goPosef(v.HeadPose.ThePose),
-			AngularVelocity:     goVector3f(v.HeadPose.AngularVelocity),
-			LinearVelocity:      goVector3f(v.HeadPose.LinearVelocity),
-			AngularAcceleration: goVector3f(v.HeadPose.AngularAcceleration),
-			LinearAcceleration:  goVector3f(v.HeadPose.LinearAcceleration),
-			TimeInSeconds:       float64(v.HeadPose.TimeInSeconds)},
+		HeadPose:          goPoseStatef(v.HeadPose),
 		CameraPose:        goPosef(v.CameraPose),
 		LeveledCameraPose: goPosef(v.LeveledCameraPose),
+		HandPoses: [2]PoseStatef{
+			goPoseStatef(v.HandPoses[0]),
+			goPoseStatef(v.HandPoses[1]),
+		},
 		RawSensorData: SensorData{
 			Accelerometer: goVector3f(v.RawSensorData.Accelerometer),
 			Gyro:          goVector3f(v.RawSensorData.Gyro),
@@ -328,22 +359,34 @@ func goTrackingState(v C.ovrTrackingState) TrackingState {
 		LastCameraFrameCounter: uint32(v.LastCameraFrameCounter)}
 }
 
-// Frame timing data reported by ovrHmd_GetFrameTiming.
+// Frame timing data reported by ovr_GetFrameTiming.
 //
-// \see ovrHmd_GetFrameTiming
+// \see ovr_GetFrameTiming
 type FrameTiming struct {
+	// A point in time when the middle of the screen will be displayed. For global shutter,
+	// this will be the display time. For rolling shutter this is a point at which half the image has
+	// been displayed. This value can be passed as an absolute time to ovr_GetTrackingState
+	// to get the best predicted pose for rendering the scene.
 	DisplayMidpointSeconds float64
-	FrameIntervalSeconds   float64
-	AppFrameIndex          float64
-	DisplayFrameIndex      float64
+
+	// Display interval between the frames. This will generally be 1 / RefreshRate of the HMD;
+	// however, it may vary slightly during runtime based on video cart scan-out timing.
+	FrameIntervalSeconds float64
+
+	// Application frame index for which we requested timing.
+	AppFrameIndex float64
+
+	// HW display frame index that we expect this application frame will hit; this is the frame that
+	// will be displayed at DisplayMidpointSeconds. This value is monotonically increasing with each v-sync.
+	DisplayFrameIndex float64
 }
 
-// Rendering information for each eye. Computed by ovrHmd_GetRenderDesc() based on the
+// Rendering information for each eye. Computed by ovr_GetRenderDesc() based on the
 // specified FOV. Note that the rendering viewport is not included
 // here as it can be specified separately and modified per frame by
 // passing different Viewport values in the layer structure.
 //
-// \see ovrHmd_GetRenderDesc
+// \see ovr_GetRenderDesc
 type EyeRenderDesc struct {
 	Eye                       EyeType
 	Fov                       FovPort
@@ -373,7 +416,7 @@ type TimewarpProjectionDesc struct {
 //   units are inches, but you're shrinking the player to half their normal size, then
 //   HmdSpaceToWorldScaleInMeters would be 0.0254*2.0.
 //
-// \see ovrEyeRenderDesc, ovrHmd_SubmitFrame
+// \see ovrEyeRenderDesc, ovr_SubmitFrame
 type ViewScaleDesc struct {
 	HmdToEyeViewOffset           [Eye_Count]Vector3f
 	HmdSpaceToWorldScaleInMeters float32
@@ -390,13 +433,11 @@ type ViewScaleDesc struct {
 type RenderAPIType int32
 
 const (
-	RenderAPI_None           RenderAPIType = C.ovrRenderAPI_None
-	RenderAPI_OpenGL                       = C.ovrRenderAPI_OpenGL
-	RenderAPI_Android_GLES                 = C.ovrRenderAPI_Android_GLES
-	RenderAPI_D3D9_Obsolete                = C.ovrRenderAPI_D3D9_Obsolete
-	RenderAPI_D3D10_Obsolete               = C.ovrRenderAPI_D3D10_Obsolete
-	RenderAPI_D3D11                        = C.ovrRenderAPI_D3D11
-	RenderAPI_Count                        = C.ovrRenderAPI_Count
+	RenderAPI_None         RenderAPIType = C.ovrRenderAPI_None
+	RenderAPI_OpenGL                     = C.ovrRenderAPI_OpenGL
+	RenderAPI_Android_GLES               = C.ovrRenderAPI_Android_GLES
+	RenderAPI_D3D11                      = C.ovrRenderAPI_D3D11
+	RenderAPI_Count                      = C.ovrRenderAPI_Count
 )
 
 // API-independent part of a texture descriptor.
@@ -420,28 +461,158 @@ type Texture struct {
 
 // Describes a set of textures that act as a rendered flip chain.
 //
-// An ovrSwapTextureSet per layer is passed to ovrHmd_SubmitFrame via one of the ovrLayer types.
+// An ovrSwapTextureSet per layer is passed to ovr_SubmitFrame via one of the ovrLayer types.
 // The TextureCount refers to the flip chain count and not an eye count.
 // See the layer structs and functions for information about how to use ovrSwapTextureSet.
 //
-// ovrSwapTextureSets must be created by either the ovrHmd_CreateSwapTextureSetD3D11 or
-// ovrHmd_CreateSwapTextureSetGL factory function, and must be destroyed by ovrHmd_DestroySwapTextureSet.
+// ovrSwapTextureSets must be created by either the ovr_CreateSwapTextureSetD3D11 or
+// ovr_CreateSwapTextureSetGL factory function, and must be destroyed by ovr_DestroySwapTextureSet.
 //
-// \see ovrHmd_CreateSwapTextureSetD3D11, ovrHmd_CreateSwapTextureSetGL, ovrHmd_DestroySwapTextureSet.
+// \see ovr_CreateSwapTextureSetD3D11, ovr_CreateSwapTextureSetGL, ovr_DestroySwapTextureSet.
 type SwapTextureSet struct {
 	cSwapTextureSet *C.ovrSwapTextureSet
 	Textures        []Texture
 	TextureCount    int
 }
 
+// CurrentIndex specifies which of the Textures will be used by the ovr_SubmitFrame call.
+// This is manually incremented by the application, typically in a round-robin manner.
+//
+// Before selecting a Texture as a rendertarget, the application should increment CurrentIndex by
+// 1 and wrap it back to 0 if CurrentIndex == TextureCount, so that it gets a fresh rendertarget,
+// one that is not currently being used for display. It can then render to Textures[CurrentIndex].
+//
+// After rendering, the application calls ovr_SubmitFrame using that same CurrentIndex value
+// to display the new rendertarget.
+//
+// The application can submit multiple frames with the same ovrSwapTextureSet and CurrentIndex
+// value if the rendertarget does not need to be updated, for example when displaying an
+// information display whose text has not changed since the previous frame.
+//
+// Multiple layers can use the same ovrSwapTextureSet at the same time - there is no need to
+// create a unique ovrSwapTextureSet for each layer. However, all the layers using a particular
+// ovrSwapTextureSet will share the same value of CurrentIndex, so they cannot use different
+// textures within the ovrSwapTextureSet.
+//
+// Once a particular Textures[CurrentIndex] has been sent to ovr_SubmitFrame, that texture
+// should not be rendered to until a subsequent ovr_SubmitFrame is made (either with a
+// different CurrentIndex value, or with a different ovrSwapTextureSet, or disabling the layer).
+//
 // The current index needs to be set on the C struct, so it is not exposed in the Go struct.
 func (s *SwapTextureSet) SetCurrentIndex(value int) {
 	s.cSwapTextureSet.CurrentIndex = C.int(value)
 }
 
-// The current index needs to be set on the C struct, so it is not exposed in the Go struct.
+// Gets the current index from the underlying C struct (see SetCurrentIndex() for details)
 func (s *SwapTextureSet) CurrentIndex() int {
 	return int(s.cSwapTextureSet.CurrentIndex)
+}
+
+// Describes button input types.
+// Button inputs are combined; that is they will be reported as pressed if they are
+// pressed on either one of the two devices.
+// The ovrButton_Up/Down/Left/Right map to both XBox D-Pad and directional buttons.
+// The ovrButton_Enter and ovrButton_Return map to Start and Back controller buttons, respectively.
+type Button int
+
+const (
+	Button_A Button = C.ovrButton_A
+	Button_B        = C.ovrButton_B
+
+	Button_RThumb    = C.ovrButton_RThumb
+	Button_RShoulder = C.ovrButton_RShoulder
+	Button_X         = C.ovrButton_X
+	Button_Y         = C.ovrButton_Y
+	Button_LThumb    = C.ovrButton_LThumb
+	Button_LShoulder = C.ovrButton_LShoulder
+
+	// Navigation through DPad.
+	Button_Up    = C.ovrButton_Up
+	Button_Down  = C.ovrButton_Down
+	Button_Left  = C.ovrButton_Left
+	Button_Right = C.ovrButton_Right
+	Button_Enter = C.ovrButton_Enter
+	Button_Back  = C.ovrButton_Back
+)
+
+// Describes touch input types.
+// These values map to capacitive touch values reported ovrInputState::Touch.
+// Some of these values are mapped to button bits for consistency.
+type Touch int
+
+const (
+	Touch_A             Touch = C.ovrTouch_A
+	Touch_B                   = C.ovrTouch_B
+	Touch_RThumb              = C.ovrTouch_RThumb
+	Touch_RIndexTrigger       = C.ovrTouch_RIndexTrigger
+	Touch_X                   = C.ovrTouch_X
+	Touch_Y                   = C.ovrTouch_Y
+	Touch_LThumb              = C.ovrTouch_LThumb
+	Touch_LIndexTrigger       = C.ovrTouch_LIndexTrigger
+
+	// Finger pose state
+	// Derived internally based on distance, proximity to sensors and filtering.
+	Touch_RIndexPointing = C.ovrTouch_RIndexPointing
+	Touch_RThumbUp       = C.ovrTouch_RThumbUp
+	Touch_LIndexPointing = C.ovrTouch_LIndexPointing
+	Touch_LThumbUp       = C.ovrTouch_LThumbUp
+)
+
+// Provides names for the left and right hand array indexes.
+//
+// \see ovrInputState, ovrTrackingState
+type HandType int
+
+const (
+	Hand_Left  HandType = C.ovrHand_Left
+	Hand_Right          = C.ovrHand_Right
+)
+
+// ovrInputState describes the complete controller input state, including Oculus Touch,
+// and XBox gamepad. If multiple inputs are connected and used at the same time,
+// their inputs are combined.
+type InputState struct {
+	// System type when the controller state was last updated.
+	TimeInSeconds float64
+
+	// Described by ovrControllerType. Indicates which ControllerTypes are present.
+	ConnectedControllerTypes uint
+
+	// Values for buttons described by ovrButton.
+	Buttons Button
+
+	// Touch values for buttons and sensors as described by ovrTouch.
+	Touches Touch
+
+	// Left and right finger trigger values (ovrHand_Left and ovrHand_Right), in the range 0.0 to 1.0f.
+	IndexTrigger [2]float32
+
+	// Left and right hand trigger values (ovrHand_Left and ovrHand_Right), in the range 0.0 to 1.0f.
+	HandTrigger [2]float32
+
+	// Horizontal and vertical thumbstick axis values (ovrHand_Left and ovrHand_Right), in the range -1.0f to 1.0f.
+	Thumbstick [2]Vector2f
+}
+
+func goInputState(v C.ovrInputState) InputState {
+	return InputState{
+		TimeInSeconds:            float64(v.TimeInSeconds),
+		ConnectedControllerTypes: uint(v.ConnectedControllerTypes),
+		Buttons:                  Button(v.Buttons),
+		Touches:                  Touch(v.Touches),
+		IndexTrigger: [2]float32{
+			float32(v.IndexTrigger[0]),
+			float32(v.IndexTrigger[1]),
+		},
+		HandTrigger: [2]float32{
+			float32(v.HandTrigger[0]),
+			float32(v.HandTrigger[1]),
+		},
+		Thumbstick: [2]Vector2f{
+			goVector2f(v.Thumbstick[0]),
+			goVector2f(v.Thumbstick[1]),
+		},
+	}
 }
 
 // Initialization flags.
@@ -450,10 +621,20 @@ func (s *SwapTextureSet) CurrentIndex() int {
 type InitFlags int32
 
 const (
-	Init_Debug          InitFlags = C.ovrInit_Debug
-	Init_ServerOptional           = C.ovrInit_ServerOptional
-	Init_RequestVersion           = C.ovrInit_RequestVersion
-	Init_ForceNoDebug             = C.ovrInit_ForceNoDebug
+	// When a debug library is requested, a slower debugging version of the library will
+	// run which can be used to help solve problems in the library and debug application code.
+	Init_Debug InitFlags = C.ovrInit_Debug
+
+	// When ServerOptional is set, the ovr_Initialize() call not will block waiting for
+	// the server to respond. If the server is not reachable, it might still succeed.
+	Init_ServerOptional = C.ovrInit_ServerOptional
+
+	// When a version is requested, the LibOVR runtime respects the RequestedMinorVersion
+	// field and verifies that the RequestedMinorVersion is supported.
+	Init_RequestVersion = C.ovrInit_RequestVersion
+
+	// These bits are writable by user code.
+	Init_WritableBits = C.ovrinit_WritableBits
 )
 
 // Logging levels
@@ -478,11 +659,58 @@ type LogCallback func(level int, message string)
 //
 // \see ovr_Initialize
 type InitParams struct {
-	Flags                 InitFlags
+	// Flags from ovrInitFlags to override default behavior.
+	// Use 0 for the defaults.
+	Flags InitFlags
+
+	// Requests a specific minimum minor version of the LibOVR runtime.
+	// Flags must include ovrInit_RequestVersion or this will be ignored
+	// and OVR_MINOR_VERSION will be used.
 	RequestedMinorVersion uint32
-	LogCallback           LogCallback
-	ConnectionTimeoutMS   uint32
+
+	// User-supplied log callback function, which may be called at any time
+	// asynchronously from multiple threads until ovr_Shutdown completes.
+	// Use NULL to specify no log callback.
+	LogCallback LogCallback
+
+	// User-supplied data which is passed as-is to LogCallback. Typically this
+	// is used to store an application-specific pointer which is read in the
+	// callback function.
+	UserData uintptr
+
+	// Relative number of milliseconds to wait for a connection to the server
+	// before failing. Use 0 for the default timeout.
+	ConnectionTimeoutMS uint32
 }
+
+// -----------------------------------------------------------------------------------
+// ***** API Interfaces
+
+// Overview of the API
+//
+// Setup:
+//  - ovr_Initialize().
+//  - ovr_Create(&hmd, &graphicsId).
+//  - Call ovr_ConfigureTracking() to configure and initialize tracking.
+//  - Use hmd members and ovr_GetFovTextureSize() to determine graphics configuration
+//    and ovr_GetRenderDesc() to get per-eye rendering parameters.
+//  - Allocate render target texture sets with ovr_CreateSwapTextureSetD3D11() or
+//    ovr_CreateSwapTextureSetGL().
+//
+// Application Loop:
+//  - Call ovr_GetFrameTiming() to get the current frame timing information.
+//  - Call ovr_GetTrackingState() and ovr_CalcEyePoses() to obtain the predicted
+//    rendering pose for each eye based on timing.
+//  - Render the scene content into CurrentIndex of ovrTextureSet for each eye and layer
+//    you plan to update this frame. Increment texture set CurrentIndex.
+//  - Call ovr_SubmitFrame() to render the distorted layers to the back buffer
+//    and present them on the HMD. If ovr_SubmitFrame returns ovrSuccess_NotVisible,
+//    there is no need to render the scene for the next loop iteration. Instead,
+//    just call ovr_SubmitFrame again until it returns ovrSuccess.
+//
+// Shutdown:
+//  - ovr_Destroy().
+//  - ovr_Shutdown().
 
 // Initializes LibOVR
 //
@@ -516,7 +744,6 @@ type InitParams struct {
 //     - ovrError_Reinitialization: Attempted to re-initialize with a different version.
 //
 // \see ovr_Shutdown
-//
 func Initialize(params *InitParams) error {
 	var cResult C.ovrResult
 	if params == nil {
@@ -526,6 +753,7 @@ func Initialize(params *InitParams) error {
 		cParams.Flags = C.uint32_t(params.Flags)
 		cParams.RequestedMinorVersion = C.uint32_t(params.RequestedMinorVersion)
 		cParams.LogCallback = C.ovrLogCallback(C.logCallback_cgo)
+		cParams.UserData = C.uintptr_t(params.UserData)
 		cParams.ConnectionTimeoutMS = C.uint32_t(params.ConnectionTimeoutMS)
 		cResult = C.ovr_Initialize(&cParams)
 	}
@@ -608,74 +836,51 @@ func TraceMessage(level int, message string) (int, error) {
 	return int(result), nil
 }
 
-// Detects or re-detects HMDs and reports the total number detected.
+// Creates a handle to an HMD.
 //
-// This function is useful to determine if an HMD can be created without committing to
-// creating it. For example, an application can use this information to present an HMD selection GUI.
+// Upon success the returned ovrHmd must be eventually freed with ovr_Destroy when it is no longer needed.
+// A second call to ovr_Create will result in an error return value if the previous Hmd has not been destroyed.
 //
-// If one or more HMDs are present, an integer value is returned which indicates
-// the number present. The number present indicates the range of valid indexes that
-// can be passed to ovrHmd_Create. If no HMDs are present, the return
-// value is zero. If there is an error, a negative error ovrResult value is
-// returned.
-//
-// \return Returns an integer that specifies the number of HMDs currently present. Upon failure, OVR_SUCCESS(result) is false.
-//
-// \see ovrHmd_Create
-func Hmd_Detect() (int, error) {
-	result := C.ovrHmd_Detect()
-	err := errorForResult(result)
-	if err != nil {
-		return 0, err
-	}
-	return int(result), nil
-}
-
-// Creates a handle to an HMD which doubles as a description structure.
-//
-// Upon success the returned ovrHmd* must be freed with ovrHmd_Destroy.
-// A second call to ovrHmd_Create with the same index as a previously
-// successful call will result in an error return value.
-//
-// \param[in] index A value in the range of [0 .. ovrHmd_Detect()-1].
 // \param[out] pHmd Provides a pointer to an ovrHmd which will be written to upon success.
-// \return Returns an ovrResult indicating success or failure.
+// \param[out] luid Provides a system specific graphics adapter identifier that locates which
+// graphics adapter has the HMD attached. This must match the adapter used by the application
+// or no rendering output will be possible. This is important for stability on multi-adapter systems. An
+// application that simply chooses the default adapter will not run reliably on multi-adapter systems.
+// \return Returns an ovrResult indicating success or failure. Upon failure
+//         the returned pHmd will be NULL.
 //
-// \see ovrHmd_Destroy
-func Hmd_Create(index int) (*Hmd, error) {
+// <b>Example code</b>
+//     \code{.cpp}
+//         ovrHmd hmd;
+//         ovrGraphicsLuid luid;
+//         ovrResult result = ovr_Create(&hmd, &luid);
+//         if(OVR_FAILURE(result))
+//            ...
+//     \endcode
+//
+// \see ovr_Destroy
+func Hmd_Create(pLuid *GraphicsLuid) (*Hmd, error) {
+	var cpLuid C.ovrGraphicsLuid
 	var cHmd C.ovrHmd
-	result := C.ovrHmd_Create(C.int(index), &cHmd)
+	result := C.ovr_Create(&cHmd, &cpLuid)
 	err := errorForResult(result)
 	if err != nil {
 		return nil, err
 	}
-	return goHmd(cHmd), nil
-}
-
-// Creates a fake HMD used for debugging only.
-//
-// This is not tied to specific hardware, but may be used to debug some of the related rendering.
-// \param[in] type Indicates the HMD type to emulate.
-// \param[out] pHmd Provides a pointer to an ovrHmd which will be written to upon success.
-// \return Returns an ovrResult indicating success or failure.
-//
-// \see ovrHmd_Create
-func Hmd_CreateDebug(typ HmdType) (*Hmd, error) {
-	var cHmd C.ovrHmd
-	result := C.ovrHmd_CreateDebug(C.ovrHmdType(typ), &cHmd)
-	err := errorForResult(result)
-	if err != nil {
-		return nil, err
+	if pLuid != nil {
+		for i := 0; i < 8; i++ {
+			pLuid.Reserved[i] = byte(cpLuid.Reserved[i])
+		}
 	}
 	return goHmd(cHmd), nil
 }
 
 // Destroys the HMD.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
-// \see ovrHmd_Create
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \see ovr_Create
 func (hmd *Hmd) Destroy() {
-	C.ovrHmd_Destroy(hmd.cHmd)
+	C.ovr_Destroy(hmd.cHmd)
 }
 
 // Returns ovrHmdCaps bits that are currently enabled.
@@ -686,42 +891,51 @@ func (hmd *Hmd) Destroy() {
 // \return Returns a combination of zero or more ovrHmdCaps.
 // \see ovrHmdCaps
 func (hmd *Hmd) GetEnabledCaps() HmdCaps {
-	return HmdCaps(C.ovrHmd_GetEnabledCaps(hmd.cHmd))
+	return HmdCaps(C.ovr_GetEnabledCaps(hmd.cHmd))
 }
 
 // Modifies capability bits described by ovrHmdCaps that can be modified,
 // such as ovrHmdCap_LowPersistance.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] hmdCaps A combination of 0 or more ovrHmdCaps.
 //
 // \see ovrHmdCaps
 func (hmd *Hmd) SetEnabledCaps(hmdCaps HmdCaps) {
-	C.ovrHmd_SetEnabledCaps(hmd.cHmd, C.uint(hmdCaps))
+	C.ovr_SetEnabledCaps(hmd.cHmd, C.uint(hmdCaps))
 }
+
+//-------------------------------------------------------------------------------------
+// @name Tracking
+//
+// Tracking functions handle the position, orientation, and movement of the HMD in space.
+//
+// All tracking interface functions are thread-safe, allowing tracking state to be sampled
+// from different threads.
 
 // Starts sensor sampling, enabling specified capabilities, described by ovrTrackingCaps.
 //
-// Use 0 for both supportedTrackingCaps and requiredTrackingCaps to disable tracking.
+// Use 0 for both requestedTrackingCaps and requiredTrackingCaps to disable tracking.
+// ovr_ConfigureTracking can be called multiple times with the same or different values
+// for a given ovrHmd.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 //
-// \param[in] supportedTrackingCaps Specifies support that is requested. The function will succeed
+// \param[in] requestedTrackingCaps specifies support that is requested. The function will succeed
 //            even if these caps are not available (i.e. sensor or camera is unplugged). Support
 //            will automatically be enabled if the device is plugged in later. Software should
 //            check ovrTrackingState.StatusFlags for real-time status.
 //
 // \param[in] requiredTrackingCaps Specifies sensor capabilities required at the time of the call.
 //            If they are not available, the function will fail. Pass 0 if only specifying
-//            supportedTrackingCaps.
+//            requestedTrackingCaps.
 //
 // \return Returns an ovrResult indicating success or failure. In the case of failure, use
 //         ovr_GetLastErrorInfo to get more information.
 //
 // \see ovrTrackingCaps
-//
 func (hmd *Hmd) ConfigureTracking(supportedTrackingCaps, requiredTrackingCaps TrackingCaps) error {
-	result := C.ovrHmd_ConfigureTracking(hmd.cHmd, C.uint(supportedTrackingCaps), C.uint(requiredTrackingCaps))
+	result := C.ovr_ConfigureTracking(hmd.cHmd, C.uint(supportedTrackingCaps), C.uint(requiredTrackingCaps))
 	return errorForResult(result)
 }
 
@@ -731,9 +945,9 @@ func (hmd *Hmd) ConfigureTracking(supportedTrackingCaps, requiredTrackingCaps Tr
 // The Roll and pitch orientation components are always determined by gravity and cannot
 // be redefined. All future tracking will report values relative to this new reference position.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 func (hmd *Hmd) RecenterPose() {
-	C.ovrHmd_RecenterPose(hmd.cHmd)
+	C.ovr_RecenterPose(hmd.cHmd)
 }
 
 // Returns tracking state reading based on the specified absolute system time.
@@ -743,18 +957,58 @@ func (hmd *Hmd) RecenterPose() {
 //
 // This may also be used for more refined timing of front buffer rendering logic, and so on.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] absTime Specifies the absolute future time to predict the return
 //            ovrTrackingState value. Use 0 to request the most recent tracking state.
 // \return Returns the ovrTrackingState that is predicted for the given absTime.
 //
-// \see ovrTrackingState, ovrHmd_GetEyePoses, ovr_GetTimeInSeconds
+// \see ovrTrackingState, ovr_GetEyePoses, ovr_GetTimeInSeconds
 func (hmd *Hmd) GetTrackingState(absTime float64) TrackingState {
-	result := C.ovrHmd_GetTrackingState(hmd.cHmd, C.double(absTime))
+	result := C.ovr_GetTrackingState(hmd.cHmd, C.double(absTime))
 	return goTrackingState(result)
 }
 
-// Describes layer types that can be passed to ovrHmd_SubmitFrame.
+// Returns the most recent input state for controllers, without positional tracking info.
+// Developers can tell whether the same state was returned by checking the PacketNumber.
+//
+// \param[out] inputState Input state that will be filled in.
+// \param[in] controllerTypeMask Specifies which controllers the input will be returned for.
+//            Described by ovrControllerType.
+// \return Returns ovrSuccess if the new state was successfully obtained.
+//
+// \see ovrControllerType
+func (hmd *Hmd) GetInputState(controllerTypeMask uint) (InputState, error) {
+	var cInputState C.ovrInputState
+	result := C.ovr_GetInputState(hmd.cHmd, C.uint(controllerTypeMask), &cInputState)
+	err := errorForResult(result)
+	if err != nil {
+		return InputState{}, err
+	}
+	return goInputState(cInputState), nil
+}
+
+// Turns on vibration of the given controller.
+//
+// To disable vibration, call ovr_SetControllerVibration with an amplitude of 0.
+// Vibration automatically stops after a nominal amount of time, so if you want vibration
+// to be continuous over multiple seconds then you need to call this function periodically.
+//
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in] controllerTypeMask Specifies controllers to apply the vibration to.
+// \param[in] frequency Specifies a vibration frequency in the range of 0.0 to 1.0.
+//            Currently the only valid values are 0.0, 0.5, and 1.0 and other values will
+//            be clamped to one of these.
+// \param[in] amplitude Specifies a vibration amplitude in the range of 0.0 to 1.0.
+//
+// \return Returns ovrSuccess upon success.
+//
+// \see ovrControllerType
+func (hmd *Hmd) SetControllerVibration(controllerTypeMask uint, frequency, amplitude float32) error {
+	result := C.ovr_SetControllerVibration(hmd.cHmd, C.uint(controllerTypeMask), C.float(frequency), C.float(amplitude))
+	return errorForResult(result)
+}
+
+// Describes layer types that can be passed to ovr_SubmitFrame.
 // Each layer type has an associated struct, such as ovrLayerEyeFov.
 //
 // \see ovrLayerHeader
@@ -769,7 +1023,7 @@ const (
 	LayerType_Direct                   = C.ovrLayerType_Direct
 )
 
-// Identifies flags used by ovrLayerHeader and which are passed to ovrHmd_SubmitFrame.
+// Identifies flags used by ovrLayerHeader and which are passed to ovr_SubmitFrame.
 //
 // \see ovrLayerHeader
 type LayerFlags int32
@@ -790,12 +1044,13 @@ type LayerHeader struct {
 	Flags LayerFlags
 }
 
+// Added for the go bindings
 type LayerInterface interface {
 	ptr() *C.ovrLayerHeader
 }
 
 // Describes a layer that specifies a monoscopic or stereoscopic view.
-// This is the kind of layer that's typically used as layer 0 to ovrHmd_SubmitFrame,
+// This is the kind of layer that's typically used as layer 0 to ovr_SubmitFrame,
 // as it is the kind of layer used to render a 3D stereoscopic view.
 //
 // Three options exist with respect to mono/stereo texture usage:
@@ -806,14 +1061,28 @@ type LayerInterface interface {
 //    - ColorTexture[0] contains a single monoscopic rendering, and Viewport[0] and
 //      Viewport[1] both refer to that rendering.
 //
-// \see ovrSwapTextureSet, ovrHmd_SubmitFrame
+// \see ovrSwapTextureSet, ovr_SubmitFrame
 type LayerEyeFov struct {
-	Header       LayerHeader
+	// Header.Type must be ovrLayerType_EyeFov.
+	Header LayerHeader
+
+	// ovrSwapTextureSets for the left and right eye respectively.
+	// The second one of which can be NULL for cases described above.
 	ColorTexture [Eye_Count]*SwapTextureSet
-	Viewport     [Eye_Count]Recti
-	Fov          [Eye_Count]FovPort
-	RenderPose   [Eye_Count]Posef
-	cStruct      C.ovrLayerEyeFov
+
+	// Specifies the ColorTexture sub-rect UV coordinates.
+	// Both Viewport[0] and Viewport[1] must be valid.
+	Viewport [Eye_Count]Recti
+
+	// The viewport field of view.
+	Fov [Eye_Count]FovPort
+
+	// Specifies the position and orientation of each eye view, with the position specified in meters.
+	// RenderPose will typically be the value returned from ovr_CalcEyePoses,
+	// but can be different in special cases if a different head pose is used for rendering.
+	RenderPose [Eye_Count]Posef
+
+	cStruct C.ovrLayerEyeFov
 }
 
 func (l *LayerEyeFov) ptr() *C.ovrLayerHeader {
@@ -843,16 +1112,36 @@ func (l *LayerEyeFov) ptr() *C.ovrLayerHeader {
 //    - ColorTexture[0] contains a single monoscopic rendering, and Viewport[0] and
 //      Viewport[1] both refer to that rendering.
 //
-// \see ovrSwapTextureSet, ovrHmd_SubmitFrame
+// \see ovrSwapTextureSet, ovr_SubmitFrame
 type LayerEyeFovDepth struct {
-	Header         LayerHeader
-	ColorTexture   [Eye_Count]*SwapTextureSet
-	Viewport       [Eye_Count]Recti
-	Fov            [Eye_Count]FovPort
-	RenderPose     [Eye_Count]Posef
-	DepthTexture   [Eye_Count]*SwapTextureSet
+	// Header.Type must be ovrLayerType_EyeFovDepth.
+	Header LayerHeader
+
+	// ovrSwapTextureSets for the left and right eye respectively.
+	// The second one can be NULL in cases described above.
+	ColorTexture [Eye_Count]*SwapTextureSet
+
+	// Specifies the ColorTexture sub-rect UV coordinates.
+	// Both Viewport[0] and Viewport[1] must be valid.
+	Viewport [Eye_Count]Recti
+
+	// The viewport field of view.
+	Fov [Eye_Count]FovPort
+
+	// Specifies the position and orientation of each eye view, with the position specified in meters.
+	// RenderPose will typically be the value returned from ovr_CalcEyePoses,
+	// but can be different in special cases if a different head pose is used for rendering.
+	RenderPose [Eye_Count]Posef
+
+	// Depth texture for positional timewarp.
+	// Must map 1:1 to the ColorTexture.
+	DepthTexture [Eye_Count]*SwapTextureSet
+
+	// Specifies how to convert DepthTexture information into meters.
+	// \see ovrTimewarpProjectionDesc_FromProjection
 	ProjectionDesc TimewarpProjectionDesc
-	cStruct        C.ovrLayerEyeFovDepth
+
+	cStruct C.ovrLayerEyeFovDepth
 }
 
 func (l *LayerEyeFovDepth) ptr() *C.ovrLayerHeader {
@@ -883,14 +1172,24 @@ func (l *LayerEyeFovDepth) ptr() *C.ovrLayerHeader {
 //
 // Quad layers are visible from both sides; they are not back-face culled.
 //
-// \see ovrSwapTextureSet, ovrHmd_SubmitFrame
+// \see ovrSwapTextureSet, ovr_SubmitFrame
 type LayerQuad struct {
-	Header         LayerHeader
-	ColorTexture   *SwapTextureSet
-	Viewport       Recti
+	// Header.Type must be ovrLayerType_QuadInWorld or ovrLayerType_QuadHeadLocked.
+	Header LayerHeader
+
+	// Contains a single image, never with any stereo view.
+	ColorTexture *SwapTextureSet
+
+	// Specifies the ColorTexture sub-rect UV coordinates.
+	Viewport Recti
+
+	// Position and orientation of the center of the quad. Position is specified in meters.
 	QuadPoseCenter Posef
-	QuadSize       Vector2f
-	cStruct        C.ovrLayerQuad
+
+	// Width and height (respectively) of the quad in meters.
+	QuadSize Vector2f
+
+	cStruct C.ovrLayerQuad
 }
 
 func (l *LayerQuad) ptr() *C.ovrLayerHeader {
@@ -909,12 +1208,20 @@ func (l *LayerQuad) ptr() *C.ovrLayerHeader {
 // This layer can be used for application-based distortion rendering and can also be
 // used for implementing a debug HUD that's viewed on the mirror texture.
 //
-// \see ovrSwapTextureSet, ovrHmd_SubmitFrame
+// \see ovrSwapTextureSet, ovr_SubmitFrame
 type LayerDirect struct {
-	Header       LayerHeader
+	// Header.Type must be ovrLayerType_EyeDirect.
+	Header LayerHeader
+
+	// ovrSwapTextureSets for the left and right eye respectively.
+	// The second one of which can be NULL for cases described above.
 	ColorTexture [Eye_Count]*SwapTextureSet
-	Viewport     [Eye_Count]Recti
-	cStruct      C.ovrLayerDirect
+
+	// Specifies the ColorTexture sub-rect UV coordinates.
+	// Both Viewport[0] and Viewport[1] must be valid.
+	Viewport [Eye_Count]Recti
+
+	cStruct C.ovrLayerDirect
 }
 
 func (l *LayerDirect) ptr() *C.ovrLayerHeader {
@@ -927,24 +1234,37 @@ func (l *LayerDirect) ptr() *C.ovrLayerHeader {
 	return (*C.ovrLayerHeader)(unsafe.Pointer(&l.cStruct))
 }
 
+// @name SDK Distortion Rendering
+//
+// All of rendering functions including the configure and frame functions
+// are not thread safe. It is OK to use ConfigureRendering on one thread and handle
+// frames on another thread, but explicit synchronization must be done since
+// functions that depend on configured state are not reentrant.
+//
+// These functions support rendering of distortion by the SDK.
+
+// TextureSet creation is rendering API-specific, so the ovr_CreateSwapTextureSetXX
+// methods can be found in the rendering API-specific headers, such as OVR_CAPI_D3D.h and OVR_CAPI_GL.h
+
 // Destroys an ovrSwapTextureSet and frees all the resources associated with it.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
-// \param[in] textureSet Specifies the ovrSwapTextureSet to destroy.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in] textureSet Specifies the ovrSwapTextureSet to destroy. If it is NULL then this function has no effect.
 //
-// \see ovrHmd_CreateSwapTextureSetD3D11, ovrHmd_CreateSwapTextureSetGL
+// \see ovr_CreateSwapTextureSetD3D11, ovr_CreateSwapTextureSetGL
+//
 func (hmd *Hmd) DestroySwapTextureSet(textureSet *SwapTextureSet) {
-	C.ovrHmd_DestroySwapTextureSet(hmd.cHmd, textureSet.cSwapTextureSet)
+	C.ovr_DestroySwapTextureSet(hmd.cHmd, textureSet.cSwapTextureSet)
 }
 
 // Destroys a mirror texture previously created by one of the mirror texture creation functions.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
-// \param[in] mirrorTexture Specifies the ovrTexture to destroy.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in] mirrorTexture Specifies the ovrTexture to destroy. If it is NULL then this function has no effect.
 //
-// \see ovrHmd_CreateMirrorTextureD3D11, ovrHmd_CreateMirrorTextureGL
+// \see ovr_CreateMirrorTextureD3D11, ovr_CreateMirrorTextureGL
 func (hmd *Hmd) DestroyMirrorTexture(mirrorTexture *Texture) {
-	C.ovrHmd_DestroyMirrorTexture(hmd.cHmd, mirrorTexture.cTexture)
+	C.ovr_DestroyMirrorTexture(hmd.cHmd, mirrorTexture.cTexture)
 }
 
 // Calculates the recommended viewport size for rendering a given eye within the HMD
@@ -955,7 +1275,7 @@ func (hmd *Hmd) DestroyMirrorTexture(mirrorTexture *Texture) {
 // at least 8 pixels of padding between them to prevent texture filtering and chromatic
 // aberration causing images to leak between the two eye views.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] eye Specifies which eye (left or right) to calculate for.
 // \param[in] fov Specifies the ovrFovPort to use.
 // \param[in] pixelsPerDisplayPixel Specifies the ratio of the number of render target pixels
@@ -963,20 +1283,20 @@ func (hmd *Hmd) DestroyMirrorTexture(mirrorTexture *Texture) {
 //            values can improve performance, higher values give improved quality.
 // \return Returns the texture width and height size.
 func (hmd *Hmd) GetFovTextureSize(eye EyeType, fov FovPort, pixelsPerDisplayPixel float32) Sizei {
-	return goSizei(C.ovrHmd_GetFovTextureSize(hmd.cHmd, C.ovrEyeType(eye), cFovPort(fov), C.float(pixelsPerDisplayPixel)))
+	return goSizei(C.ovr_GetFovTextureSize(hmd.cHmd, C.ovrEyeType(eye), cFovPort(fov), C.float(pixelsPerDisplayPixel)))
 }
 
 // Computes the distortion viewport, view adjust, and other rendering parameters for
 // the specified eye.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] eyeType Specifies which eye (left or right) for which to perform calculations.
 // \param[in] fov Specifies the ovrFovPort to use.
 // \return Returns the computed ovrEyeRenderDesc for the given eyeType and field of view.
 //
 // \see ovrEyeRenderDesc
 func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
-	result := C.ovrHmd_GetRenderDesc(hmd.cHmd, C.ovrEyeType(eye), cFovPort(fov))
+	result := C.ovr_GetRenderDesc(hmd.cHmd, C.ovrEyeType(eye), cFovPort(fov))
 	return EyeRenderDesc{
 		Eye:                       EyeType(result.Eye),
 		Fov:                       goFovPort(result.Fov),
@@ -987,14 +1307,14 @@ func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
 
 // Submits layers for distortion and display.
 //
-// ovrHmd_SubmitFrame triggers distortion and processing which might happen asynchronously.
+// ovr_SubmitFrame triggers distortion and processing which might happen asynchronously.
 // The function will return when there is room in the submission queue and surfaces
 // are available. Distortion might or might not have completed.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 //
-// \param[in] frameIndex Specifies the targeted frame index, or 0, to refer to one frame after the last
-//        time ovrHmd_SubmitFrame was called.
+// \param[in] frameIndex Specifies the targeted application frame index, or 0 to refer to one frame
+//        after the last time ovr_SubmitFrame was called.
 //
 // \param[in] viewScaleDesc Provides additional information needed only if layerPtrList contains
 //        a ovrLayerType_QuadInWorld or ovrLayerType_QuadHeadLocked. If NULL, a default
@@ -1011,10 +1331,10 @@ func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
 //
 // - Layers are drawn in the order they are specified in the array, regardless of the layer type.
 //
-// - Layers are not remembered between successive calls to ovrHmd_SubmitFrame. A layer must be
-//   specified in every call to ovrHmd_SubmitFrame or it won't be displayed.
+// - Layers are not remembered between successive calls to ovr_SubmitFrame. A layer must be
+//   specified in every call to ovr_SubmitFrame or it won't be displayed.
 //
-// - If a layerPtrList entry that was specified in a previous call to ovrHmd_SubmitFrame is
+// - If a layerPtrList entry that was specified in a previous call to ovr_SubmitFrame is
 //   passed as NULL or is of type ovrLayerType_Disabled, that layer is no longer displayed.
 //
 // - A layerPtrList entry can be of any layer type and multiple entries of the same layer type
@@ -1026,7 +1346,7 @@ func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
 //         ovrLayerQuad    layer1;
 //           ...
 //         ovrLayerHeader* layers[2] = { &layer0.Header, &layer1.Header };
-//         ovrResult result = ovrHmd_SubmitFrame(hmd, frameIndex, nullptr, layers, 2);
+//         ovrResult result = ovr_SubmitFrame(hmd, frameIndex, nullptr, layers, 2);
 //     \endcode
 //
 // \return Returns an ovrResult for which OVR_SUCCESS(result) is false upon error and true
@@ -1034,10 +1354,15 @@ func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
 //     - ovrSuccess: rendering completed successfully.
 //     - ovrSuccess_NotVisible: rendering completed successfully but was not displayed on the HMD,
 //       usually because another application currently has ownership of the HMD. Applications receiving
-//       this result should stop rendering new content, but continue to call ovrHmd_SubmitFrame periodically
+//       this result should stop rendering new content, but continue to call ovr_SubmitFrame periodically
 //       until it returns a value other than ovrSuccess_NotVisible.
+//     - ovrError_DisplayLost: The session has become invalid (such as due to a device removal)
+//       and the shared resources need to be released (ovr_DestroySwapTextureSet), the session needs to
+//       destroyed (ovr_Destory) and recreated (ovr_Create), and new resources need to be created
+//       (ovr_CreateSwapTextureSetXXX). The application's existing private graphics resources do not
+//       need to be recreated unless the new ovr_Create call returns a different GraphicsLuid.
 //
-// \see ovrHmd_GetFrameTiming, ovrViewScaleDesc, ovrLayerHeader
+// \see ovr_GetFrameTiming, ovrViewScaleDesc, ovrLayerHeader
 func (hmd *Hmd) SubmitFrame(frameIndex uint, viewScaleDesc *ViewScaleDesc, layers []LayerInterface) (bool, error) {
 	var cViewScaleDesc C.ovrViewScaleDesc
 	var cViewScaleDescPtr *C.ovrViewScaleDesc = nil
@@ -1057,7 +1382,7 @@ func (hmd *Hmd) SubmitFrame(frameIndex uint, viewScaleDesc *ViewScaleDesc, layer
 	for i := 0; i < layerCount; i++ {
 		cLayers = append(cLayers, layers[i].ptr())
 	}
-	result := C.ovrHmd_SubmitFrame(hmd.cHmd, C.uint(frameIndex), cViewScaleDescPtr, &cLayers[0], C.uint(layerCount))
+	result := C.ovr_SubmitFrame(hmd.cHmd, C.uint(frameIndex), cViewScaleDescPtr, &cLayers[0], C.uint(layerCount))
 
 	if result == C.ovrSuccess_NotVisible {
 		return false, nil
@@ -1072,39 +1397,29 @@ func (hmd *Hmd) SubmitFrame(frameIndex uint, viewScaleDesc *ViewScaleDesc, layer
 // This is used in SubmitFrame to pass the layers to C. Having a package variable avoids allocating memory on every call.
 var cLayers []*C.ovrLayerHeader
 
+//-------------------------------------------------------------------------------------
+/// @name Frame Timing
+
 // Gets the ovrFrameTiming for the given frame index.
 //
 // The application should increment frameIndex for each successively targeted frame,
 // and pass that index to any relevent OVR functions that need to apply to the frame
 // identified by that index.
 //
-// This function is thread-safe and allows for multiple application threads to target
+// This function is thread-safe and allows for multiple application threads to targe
 // their processing to the same displayed frame.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] frameIndex Identifies the frame the caller wishes to target.
 // \return Returns the ovrFrameTiming for the given frameIndex.
-// \see ovrFrameTiming, ovrHmd_ResetFrameTiming
+// \see ovrFrameTiming
 func (hmd *Hmd) GetFrameTiming(frameIndex uint) FrameTiming {
-	result := C.ovrHmd_GetFrameTiming(hmd.cHmd, C.uint(frameIndex))
+	result := C.ovr_GetFrameTiming(hmd.cHmd, C.uint(frameIndex))
 	return FrameTiming{
 		DisplayMidpointSeconds: float64(result.DisplayMidpointSeconds),
 		FrameIntervalSeconds:   float64(result.FrameIntervalSeconds),
 		AppFrameIndex:          float64(result.AppFrameIndex),
 		DisplayFrameIndex:      float64(result.DisplayFrameIndex)}
-}
-
-// Initializes and resets frame time tracking.
-//
-// This is typically not necessary, but is helpful if the application changes vsync state or
-// video mode. vsync is assumed to be on if this isn't called. Resets internal frame index to
-// the specified number.
-//
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
-// \param[in] frameIndex Identifies the frame the caller wishes to target.
-// \see ovrHmd_GetFrameTiming
-func (hmd *Hmd) ResetFrameTiming(frameIndex uint) {
-	C.ovrHmd_ResetFrameTiming(hmd.cHmd, C.uint(frameIndex))
 }
 
 // Returns global, absolute high-resolution time in seconds.
@@ -1114,14 +1429,94 @@ func (hmd *Hmd) ResetFrameTiming(frameIndex uint) {
 //
 // \return Returns seconds as a floating point value.
 // \see ovrPoseStatef, ovrSensorData, ovrFrameTiming
-//
 func GetTimeInSeconds() float64 {
 	return float64(C.ovr_GetTimeInSeconds())
 }
 
+// Performance HUD enables the HMD user to see information critical to
+// the real-time operation of the VR application such as latency timing,
+// and CPU & GPU performance metrics
+//
+//     App can toggle performance HUD modes as such:
+//     \code{.cpp}
+//         ovrPerfHudMode PerfHudMode = ovrPerfHud_LatencyTiming;
+//         ovr_SetInt(Hmd, OVR_PERF_HUD_MODE, (int)PerfHudMode);
+//     \endcode
+type PerfHudMode int
+
+const (
+	// Turns off the performance HUD
+	PerfHud_Off PerfHudMode = C.ovrPerfHud_Off
+
+	// Shows latency related timing info
+	PerfHud_LatencyTiming = C.ovrPerfHud_LatencyTiming
+
+	// Shows CPU & GPU timing info
+	PerfHud_RenderTiming = C.ovrPerfHud_RenderTiming
+
+	// Shows available performance headroom in a "consumer-friendly" way
+	PerfHud_PerfHeadroom = C.ovrPerfHud_PerfHeadroom
+
+	// Shows SDK Version Info
+	PerfHud_VersionInfo = C.ovrPerfHud_VersionInfo
+)
+
+// Debug HUD is provided to help developers gauge and debug the fidelity of their app's
+// stereo rendering characteristics. Using the provided quad and crosshair guides,
+// the developer can verify various aspects such as VR tracking units (e.g. meters),
+// stereo camera-parallax properties (e.g. making sure objects at infinity are rendered
+// with the proper separation), measuring VR geometry sizes and distances and more.
+//
+//     App can toggle the debug HUD modes as such:
+//     \code{.cpp}
+//         ovrDebugHudStereoMode DebugHudMode = ovrDebugHudStereo_QuadWithCrosshair;
+//         ovr_SetInt(Hmd, OVR_DEBUG_HUD_STEREO_MODE, (int)DebugHudMode);
+//     \endcode
+//
+// The app can modify the visual properties of the stereo guide (i.e. quad, crosshair)
+// using the ovr_SetFloatArray function. For a list of tweakable properties,
+// see the OVR_DEBUG_HUD_STEREO_GUIDE_* keys in the OVR_CAPI_Keys.h header file.
+type DebugHudStereoMode int
+
+const (
+	// Turns off the Stereo Debug HUD
+	DebugHudStereo_Off DebugHudStereoMode = C.ovrDebugHudStereo_Off
+
+	// Renders Quad in world for Stereo Debugging
+	DebugHudStereo_Quad = C.ovrDebugHudStereo_Quad
+
+	// Renders Quad+crosshair in world for Stereo Debugging
+	DebugHudStereo_QuadWithCrosshair = C.ovrDebugHudStereo_QuadWithCrosshair
+
+	// Renders screen-space crosshair at infinity for Stereo Debugging
+	DebugHudStereo_CrosshairAtInfinity = C.ovrDebugHudStereo_CrosshairAtInfinity
+)
+
+// Should be called when the headset is placed on a new user.
+// Previously named ovr_ResetOnlyBackOfHeadTrackingForConnectConf.
+//
+// This may be removed in a future SDK version.
+func (hmd *Hmd) ResetBackOfHeadTracking() {
+	C.ovr_ResetBackOfHeadTracking(hmd.cHmd)
+}
+
+// Should be called when a tracking camera is moved.
+//
+// This may be removed in a future SDK version.
+//
+func (hmd *Hmd) ResetMulticameraTracking() {
+	C.ovr_ResetMulticameraTracking(hmd.cHmd)
+}
+
+// -----------------------------------------------------------------------------------
+// @name Property Access
+//
+// These functions read and write OVR properties. Supported properties
+// are defined in OVR_CAPI_Keys.h
+
 // Reads a boolean property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid for only the call.
 // \param[in] defaultVal specifes the value to return if the property couldn't be read.
 // \return Returns the property interpreted as a boolean value. Returns defaultVal if
@@ -1130,13 +1525,13 @@ func (hmd *Hmd) GetBool(propertyName string, defaultVal bool) bool {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	return goBool(C.ovrHmd_GetBool(hmd.cHmd, cPropertyName, ovrBool(defaultVal)))
+	return goBool(C.ovr_GetBool(hmd.cHmd, cPropertyName, ovrBool(defaultVal)))
 }
 
 // Writes or creates a boolean property.
 // If the property wasn't previously a boolean property, it is changed to a boolean property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] value The value to write.
 // \return Returns true if successful, otherwise false. A false result should only occur if the property
@@ -1145,7 +1540,7 @@ func (hmd *Hmd) SetBool(propertyName string, value bool) error {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	result := C.ovrHmd_SetBool(hmd.cHmd, cPropertyName, ovrBool(value))
+	result := C.ovr_SetBool(hmd.cHmd, cPropertyName, ovrBool(value))
 	if result == C.ovrFalse {
 		return errors.New("Failed to set property")
 	}
@@ -1154,7 +1549,7 @@ func (hmd *Hmd) SetBool(propertyName string, value bool) error {
 
 // Reads an integer property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] defaultVal Specifes the value to return if the property couldn't be read.
 // \return Returns the property interpreted as an integer value. Returns defaultVal if
@@ -1163,14 +1558,14 @@ func (hmd *Hmd) GetInt(propertyName string, defaultVal int) int {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	return int(C.ovrHmd_GetInt(hmd.cHmd, cPropertyName, C.int(defaultVal)))
+	return int(C.ovr_GetInt(hmd.cHmd, cPropertyName, C.int(defaultVal)))
 }
 
 // Writes or creates an integer property.
 //
 // If the property wasn't previously a boolean property, it is changed to an integer property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] value The value to write.
 // \return Returns true if successful, otherwise false. A false result should only occur if the property
@@ -1179,7 +1574,7 @@ func (hmd *Hmd) SetInt(propertyName string, value int) error {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	result := C.ovrHmd_SetInt(hmd.cHmd, cPropertyName, C.int(value))
+	result := C.ovr_SetInt(hmd.cHmd, cPropertyName, C.int(value))
 	if result == C.ovrFalse {
 		return errors.New("Failed to set property")
 	}
@@ -1188,7 +1583,7 @@ func (hmd *Hmd) SetInt(propertyName string, value int) error {
 
 // Reads a float property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] defaultVal specifes the value to return if the property couldn't be read.
 // \return Returns the property interpreted as an float value. Returns defaultVal if
@@ -1197,13 +1592,13 @@ func (hmd *Hmd) GetFloat(propertyName string, defaultVal float32) float32 {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	return float32(C.ovrHmd_GetFloat(hmd.cHmd, cPropertyName, C.float(defaultVal)))
+	return float32(C.ovr_GetFloat(hmd.cHmd, cPropertyName, C.float(defaultVal)))
 }
 
 // Writes or creates a float property.
 // If the property wasn't previously a float property, it's changed to a float property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] value The value to write.
 // \return Returns true if successful, otherwise false. A false result should only occur if the property
@@ -1212,7 +1607,7 @@ func (hmd *Hmd) SetFloat(propertyName string, value float32) error {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	result := C.ovrHmd_SetFloat(hmd.cHmd, cPropertyName, C.float(value))
+	result := C.ovr_SetFloat(hmd.cHmd, cPropertyName, C.float(value))
 	if result == C.ovrFalse {
 		return errors.New("Failed to set property")
 	}
@@ -1221,7 +1616,7 @@ func (hmd *Hmd) SetFloat(propertyName string, value float32) error {
 
 // Reads a float array property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] values An array of float to write to.
 // \param[in] valuesCapacity Specifies the maximum number of elements to write to the values array.
@@ -1231,13 +1626,13 @@ func (hmd *Hmd) GetFloatArray(propertyName string, valuesCapacity uint) []float3
 	defer C.free(unsafe.Pointer(cPropertyName))
 
 	result := make([]float32, valuesCapacity)
-	count := uint(C.ovrHmd_GetFloatArray(hmd.cHmd, cPropertyName, (*C.float)(&result[0]), C.uint(valuesCapacity)))
+	count := uint(C.ovr_GetFloatArray(hmd.cHmd, cPropertyName, (*C.float)(&result[0]), C.uint(valuesCapacity)))
 	return result[:count]
 }
 
 // Writes or creates a float array property.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] values An array of float to write from.
 // \param[in] valuesSize Specifies the number of elements to write.
@@ -1247,7 +1642,7 @@ func (hmd *Hmd) SetFloatArray(propertyName string, values []float32) error {
 	cPropertyName := C.CString(propertyName)
 	defer C.free(unsafe.Pointer(cPropertyName))
 
-	result := C.ovrHmd_SetFloatArray(hmd.cHmd, cPropertyName, (*C.float)(&values[0]), C.uint(len(values)))
+	result := C.ovr_SetFloatArray(hmd.cHmd, cPropertyName, (*C.float)(&values[0]), C.uint(len(values)))
 	if result == C.ovrFalse {
 		return errors.New("Failed to set property")
 	}
@@ -1257,11 +1652,11 @@ func (hmd *Hmd) SetFloatArray(propertyName string, values []float32) error {
 // Reads a string property.
 // Strings are UTF8-encoded and null-terminated.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] defaultVal Specifes the value to return if the property couldn't be read.
 // \return Returns the string property if it exists. Otherwise returns defaultVal, which can be specified as NULL.
-//         The return memory is guaranteed to be valid until next call to ovrHmd_GetString or
+//         The return memory is guaranteed to be valid until next call to ovr_GetString or
 //         until the HMD is destroyed, whichever occurs first.
 func (hmd *Hmd) GetString(propertyName string, defaultVal string) string {
 	cPropertyName := C.CString(propertyName)
@@ -1269,13 +1664,13 @@ func (hmd *Hmd) GetString(propertyName string, defaultVal string) string {
 	cDefaultVal := C.CString(defaultVal)
 	defer C.free(unsafe.Pointer(cDefaultVal))
 
-	return C.GoString(C.ovrHmd_GetString(hmd.cHmd, cPropertyName, cDefaultVal))
+	return C.GoString(C.ovr_GetString(hmd.cHmd, cPropertyName, cDefaultVal))
 }
 
 // Writes or creates a string property.
 // Strings are UTF8-encoded and null-terminated.
 //
-// \param[in] hmd Specifies an ovrHmd previously returned by ovrHmd_Create.
+// \param[in] hmd Specifies an ovrHmd previously returned by ovr_Create.
 // \param[in] propertyName The name of the property, which needs to be valid only for the call.
 // \param[in] value The string property, which only needs to be valid for the duration of the call.
 // \return Returns true if successful, otherwise false. A false result should only occur if the property
@@ -1286,7 +1681,7 @@ func (hmd *Hmd) SetString(propertyName string, value string) error {
 	cValue := C.CString(value)
 	defer C.free(unsafe.Pointer(cValue))
 
-	result := C.ovrHmd_SetString(hmd.cHmd, cPropertyName, cValue)
+	result := C.ovr_SetString(hmd.cHmd, cPropertyName, cValue)
 	if result == C.ovrFalse {
 		return errors.New("Failed to set property")
 	}

@@ -16,7 +16,7 @@ func Matrix4f_Projection(fov FovPort, znear, zfar float32, projectionModFlags Pr
 	return Matrix4f{}
 }
 
-func TimewarpProjectionDesc_FromProjection(projection Matrix4f) TimewarpProjectionDesc {
+func TimewarpProjectionDesc_FromProjection(projection Matrix4f, projectionModFlags ProjectionModifier) TimewarpProjectionDesc {
 	return TimewarpProjectionDesc{}
 }
 
@@ -30,8 +30,4 @@ func CalcEyePoses(headPose Posef, hmdToEyeViewOffset [2]Vector3f) [2]Posef {
 
 func (hmd *Hmd) GetEyePoses(frameIndex uint, hmdToEyeViewOffset [2]Vector3f) ([2]Posef, TrackingState) {
 	return [2]Posef{Posef{}, Posef{}}, TrackingState{}
-}
-
-func WaitTillTime(absTime float64) float64 {
-	return 0
 }

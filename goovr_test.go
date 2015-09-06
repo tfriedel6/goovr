@@ -2,7 +2,7 @@ package goovr_test
 
 import (
 	"testing"
-	"github.com/tfriedel6/goovr"
+	"github.com/void6/goovr"
 	"fmt"
 	"time"
 )
@@ -13,7 +13,7 @@ func ovrInit(t *testing.T) {
 		RequestedMinorVersion: 0,
 		LogCallback: nil,
 		ConnectionTimeoutMS: 0}
-	err := goovr.Initialize(params)
+	err := goovr.Initialize(&params)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,30 +28,11 @@ func TestInitialize(t *testing.T) {
 	ovrShutdown()
 }
 
-func TestEnumDevices(t *testing.T) {
-	ovrInit(t)
-	defer ovrShutdown()
-
-	num, err := goovr.Hmd_Detect()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%d device(s) detected", num)
-}
-
 func TestCreateFirstHMD(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
 
-	num, err := goovr.Hmd_Detect()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num <= 0 {
-		t.Fatal("No HMD connected")
-	}
-
-	hmd, err := goovr.Hmd_Create(0)
+	hmd, err := goovr.Hmd_Create(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,15 +44,7 @@ func TestTracking(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
 
-	num, err := goovr.Hmd_Detect()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num <= 0 {
-		t.Fatal("No HMD connected")
-	}
-
-	hmd, err := goovr.Hmd_Create(0)
+	hmd, err := goovr.Hmd_Create(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,14 +83,6 @@ func TestTracking(t *testing.T) {
 func TestProperties(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
-
-	num, err := goovr.Hmd_Detect()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num <= 0 {
-		t.Fatal("No HMD connected")
-	}
 
 	hmd, err := goovr.Hmd_Create(0)
 	if err != nil {

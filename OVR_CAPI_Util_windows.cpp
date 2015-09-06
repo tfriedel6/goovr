@@ -22,7 +22,7 @@ limitations under the License.
 
 
 #include <OVR_CAPI_Util.h>
-#include "OVR_StereoProjection.h"
+#include <OVR_StereoProjection.h>
 
 #if defined(_MSC_VER)
     #include <emmintrin.h>
@@ -43,12 +43,39 @@ ovrMatrix4f ovrMatrix4f_Projection(ovrFovPort fov, float znear, float zfar, unsi
     return OVR::CreateProjection(rightHanded , isOpenGL, fov, OVR::StereoEye_Center, znear, zfar, flipZ, farAtInfinity);
 }
 
-ovrTimewarpProjectionDesc ovrTimewarpProjectionDesc_FromProjection(ovrMatrix4f Projection)
+ovrTimewarpProjectionDesc ovrTimewarpProjectionDesc_FromProjection(ovrMatrix4f Projection, unsigned int projectionModFlags)
 {
     ovrTimewarpProjectionDesc res;
     res.Projection22 = Projection.M[2][2];
     res.Projection23 = Projection.M[2][3];
     res.Projection32 = Projection.M[3][2];
+
+    if ((res.Projection32 != 1.0f) && (res.Projection32 != -1.0f))
+    {
+        // This is a very strange projection matrix, and probably won't work.
+        // If you need it to work, please contact Oculus and let us know your usage scenario.
+    }
+
+    if ( ( projectionModFlags & ovrProjection_ClipRangeOpenGL ) != 0 )
+    {
+        // Internally we use the D3D range of [0,+w] not the OGL one of [-w,+w], so we need to convert one to the other.
+        // Note that the values in the depth buffer, and the actual linear depth we want is the same for both APIs,
+        // the difference is purely in the values inside the projection matrix.
+
+        // D3D does this:
+        // depthBuffer =             ( ProjD3D.M[2][2] * linearDepth + ProjD3D.M[2][3] ) / ( linearDepth * ProjD3D.M[3][2] );
+        // OGL does this:
+        // depthBuffer = 0.5 + 0.5 * ( ProjOGL.M[2][2] * linearDepth + ProjOGL.M[2][3] ) / ( linearDepth * ProjOGL.M[3][2] );
+
+        // Therefore:
+        // ProjD3D.M[2][2] = 0.5 * ( ProjOGL.M[2][2] + ProjOGL.M[3][2] );
+        // ProjD3D.M[2][3] = 0.5 *   ProjOGL.M[2][3];
+        // ProjD3D.M[3][2] =         ProjOGL.M[3][2];
+
+        res.Projection22 = 0.5f * ( Projection.M[2][2] + Projection.M[3][2] );
+        res.Projection23 = 0.5f *   Projection.M[2][3];
+        res.Projection32 =          Projection.M[3][2];
+    }
     return res;
 }
 
@@ -124,13 +151,13 @@ void ovr_CalcEyePoses(ovrPosef headPose,
 }
 
 
-void ovrHmd_GetEyePoses(ovrHmd hmd, unsigned int frameIndex,
+void ovr_GetEyePoses(ovrHmd hmd, unsigned int frameIndex,
                         const ovrVector3f hmdToEyeViewOffset[2],
                         ovrPosef outEyePoses[2],
                         ovrTrackingState* outHmdTrackingState)
 {
-    ovrFrameTiming   ftiming = ovrHmd_GetFrameTiming(hmd, frameIndex);
-    ovrTrackingState hmdState = ovrHmd_GetTrackingState(hmd, ftiming.DisplayMidpointSeconds);
+    ovrFrameTiming   ftiming = ovr_GetFrameTiming(hmd, frameIndex);
+    ovrTrackingState hmdState = ovr_GetTrackingState(hmd, ftiming.DisplayMidpointSeconds);
     ovr_CalcEyePoses(hmdState.HeadPose.ThePose, hmdToEyeViewOffset, outEyePoses);
     if ( outHmdTrackingState != nullptr )
     {
@@ -138,32 +165,6 @@ void ovrHmd_GetEyePoses(ovrHmd hmd, unsigned int frameIndex,
     }
 }
 
-
-
-
-double ovr_WaitTillTime(double absTime)
-{
-    double       initialTime = ovr_GetTimeInSeconds();
-    double       newTime     = initialTime;
-    
-    while(newTime < absTime)
-    {
-        for (int j = 0; j < 5; j++)
-        {
-            #if defined(__x86_64__) || defined(_M_AMD64) || defined(__i386__) ||  defined(_M_IX86) // Intel architecture...
-                #if defined(__GNUC__) || defined(__clang__)
-                    asm volatile("pause" ::: "memory");
-                #elif defined(_MSC_VER)
-                    _mm_pause();
-                #endif
-            #endif
-        }
-
-        newTime = ovr_GetTimeInSeconds();
-    }
-
-    return (newTime - initialTime);
-}
 
 
 

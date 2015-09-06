@@ -28,7 +28,7 @@ limitations under the License.
 #define OVR_StereoProjection_h
 
 
-#include "Extras/OVR_Math.h"
+#include "OVR_Math.h"
 
 
 namespace OVR {
@@ -41,9 +41,9 @@ namespace OVR {
 // retrieve StereoEyeParams.
 enum StereoEye
 {
-    StereoEye_Center,
     StereoEye_Left,
-    StereoEye_Right    
+    StereoEye_Right,
+    StereoEye_Center
 };
 
 

@@ -63,22 +63,20 @@ type FovPort struct {
 type HmdType int32
 
 const (
-	Hmd_None      HmdType = iota
+	Hmd_None    HmdType = iota
 	Hmd_DK1
 	Hmd_DKHD
 	Hmd_DK2
-	Hmd_BlackStar
 	Hmd_CB
 	Hmd_Other
+	Hmd_E3_2015
+	Hmd_ES06
 )
 
 type HmdCaps int32
 
 const (
-	HmdCap_DebugDevice       HmdCaps = iota
-	HmdCap_LowPersistence
-	HmdCap_DynamicPrediction
-	HmdCap_NoVSync
+	HmdCap_DebugDevice   HmdCaps = iota
 	HmdCap_Writable_Mask
 	HmdCap_Service_Mask
 )
@@ -105,9 +103,12 @@ const (
 	Eye_Count
 )
 
+type GraphicsLuid struct {
+	Reserved [8]byte
+}
+
 // This is a complete descriptor of the HMD.
 type Hmd struct {
-	Handle                     unsafe.Pointer
 	Type                       HmdType
 	ProductName                string
 	Manufacturer               string
@@ -120,11 +121,12 @@ type Hmd struct {
 	CameraFrustumVFovInRadians float32
 	CameraFrustumNearZInMeters float32
 	CameraFrustumFarZInMeters  float32
-	HmdCaps                    HmdCaps
-	TrackingCaps               TrackingCaps
+	AvailableHmdCaps           HmdCaps
+	DefaultHmdCaps             HmdCaps
+	AvailableTrackingCaps      TrackingCaps
+	DefaultTrackingCaps        TrackingCaps
 	DefaultEyeFov              [Eye_Count]FovPort
 	MaxEyeFov                  [Eye_Count]FovPort
-	EyeRenderOrder             [Eye_Count]EyeType
 	Resolution                 Sizei
 }
 
@@ -151,6 +153,7 @@ type TrackingState struct {
 	HeadPose               PoseStatef
 	CameraPose             Posef
 	LeveledCameraPose      Posef
+	HandPoses [2]PoseStatef
 	RawSensorData          SensorData
 	StatusFlags            StatusBits
 	LastCameraFrameCounter uint32
@@ -188,8 +191,6 @@ const (
 	RenderAPI_None           RenderAPIType = iota
 	RenderAPI_OpenGL
 	RenderAPI_Android_GLES
-	RenderAPI_D3D9_Obsolete
-	RenderAPI_D3D10_Obsolete
 	RenderAPI_D3D11
 	RenderAPI_Count
 )
@@ -217,6 +218,62 @@ func (s *SwapTextureSet) CurrentIndex() int {
 	return 0
 }
 
+type Button int
+
+const (
+	Button_A Button = iota
+	Button_B
+
+	Button_RThumb
+	Button_RShoulder
+	Button_X
+	Button_Y
+	Button_LThumb
+	Button_LShoulder
+
+	Button_Up
+	Button_Down
+	Button_Left
+	Button_Right
+	Button_Enter
+	Button_Back
+)
+
+type Touch int
+
+const (
+	Touch_A             Touch = iota
+	Touch_B
+	Touch_RThumb
+	Touch_RIndexTrigger
+	Touch_X
+	Touch_Y
+	Touch_LThumb
+	Touch_LIndexTrigger
+
+	Touch_RIndexPointing
+	Touch_RThumbUp
+	Touch_LIndexPointing
+	Touch_LThumbUp
+)
+
+type HandType int
+
+const (
+	Hand_Left  HandType = iota
+	Hand_Right
+)
+
+type InputState struct {
+	TimeInSeconds float64
+	ConnectedControllerTypes uint
+	Buttons Button
+	Touches Touch
+	IndexTrigger [2]float32
+	HandTrigger [2]float32
+	Thumbstick [2]Vector2f
+}
+
 type InitFlags int32
 
 const (
@@ -240,6 +297,7 @@ type InitParams struct {
 	Flags                 InitFlags
 	RequestedMinorVersion uint32
 	LogCallback           LogCallback
+	UserData uintptr
 	ConnectionTimeoutMS   uint32
 }
 
@@ -267,15 +325,7 @@ func TraceMessage(level int, message string) (int, error) {
 	return 0, nil
 }
 
-func Hmd_Detect() (int, error) {
-	return 0, nil
-}
-
-func Hmd_Create(index int) (*Hmd, error) {
-	return nil, notAvailableErr
-}
-
-func Hmd_CreateDebug(typ HmdType) (*Hmd, error) {
+func Hmd_Create(pLuid *GraphicsLuid) (*Hmd, error) {
 	return nil, notAvailableErr
 }
 
@@ -298,6 +348,14 @@ func (hmd *Hmd) RecenterPose() {
 
 func (hmd *Hmd) GetTrackingState(absTime float64) TrackingState {
 	return TrackingState{}
+}
+
+func (hmd *Hmd) GetInputState(controllerTypeMask uint) (InputState, error) {
+	return InputState{}, nil
+}
+
+func (hmd *Hmd) SetControllerVibration(controllerTypeMask uint, frequency, amplitude float32) error {
+	return nil
 }
 
 type LayerType int32
