@@ -14,10 +14,10 @@ type D3D11TextureData struct {
 
 // Create Texture Set suitable for use with D3D11.
 //
-// Multiple calls to ovr_CreateSwapTextureSetD3D11 for the same ovrHmd is supported, but applications
+// Multiple calls to ovr_CreateSwapTextureSetD3D11 for the same ovrHmd are supported, but applications
 // cannot rely on switching between ovrSwapTextureSets at runtime without a performance penalty.
 //
-// \param[in]  hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
 // \param[in]  device Specifies the associated ID3D11Device, which must be the one that the textures will be used with in the application's process.
 // \param[in]  desc Specifies requested texture properties. See notes for more info about texture format.
 // \param[in]  miscFlags Specifies misc bit flags of type \a ovrSwapTextureSetD3D11Flags used when creating the swap textures
@@ -39,9 +39,9 @@ type D3D11TextureData struct {
 // formats (e.g. DXGI_FORMAT_D32) are ignored as they are always converted to be typeless.
 //
 // \see ovr_DestroySwapTextureSet
-func (hmd *Hmd) CreateSwapTextureSetD3D11(device unsafe.Pointer, desc unsafe.Pointer, miscFlags uint) (*SwapTextureSet, error) {
+func (hmd *Session) CreateSwapTextureSetD3D11(device unsafe.Pointer, desc unsafe.Pointer, miscFlags uint) (*SwapTextureSet, error) {
 	var cSet *C.ovrSwapTextureSet
-	result := C.ovr_CreateSwapTextureSetD3D11(hmd.cHmd, (*C.ID3D11Device)(device), (*C.D3D11_TEXTURE2D_DESC)(desc), C.uint(miscFlags), &cSet)
+	result := C.ovr_CreateSwapTextureSetD3D11(hmd.cSession, (*C.ID3D11Device)(device), (*C.D3D11_TEXTURE2D_DESC)(desc), C.uint(miscFlags), &cSet)
 	err := errorForResult(result)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (hmd *Hmd) CreateSwapTextureSetD3D11(device unsafe.Pointer, desc unsafe.Poi
 // A second call to ovr_CreateMirrorTextureD3D11 for a given ovrHmd before destroying the first one
 // is not supported and will result in an error return.
 //
-// \param[in]  hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
 // \param[in]  device Specifies the associated ID3D11Device, which must be the one that the textures will be used with in the application's process.
 // \param[in]  desc Specifies requested texture properties. See notes for info about texture format.
 // \param[in]  miscFlags Specifies misc bit flags of type \a ovrSwapTextureSetD3D11Flags used when creating the swap textures
@@ -91,9 +91,9 @@ func (hmd *Hmd) CreateSwapTextureSetD3D11(device unsafe.Pointer, desc unsafe.Poi
 // gamma-curve artifacts.
 //
 // \see ovr_DestroyMirrorTexture
-func (hmd *Hmd) CreateMirrorTextureD3D11(device unsafe.Pointer, desc unsafe.Pointer, miscFlags uint) (*Texture, error) {
+func (hmd *Session) CreateMirrorTextureD3D11(device unsafe.Pointer, desc unsafe.Pointer, miscFlags uint) (*Texture, error) {
 	var cTexture *C.union_ovrD3D11Texture
-	result := C.ovr_CreateMirrorTextureD3D11(hmd.cHmd, (*C.ID3D11Device)(device), (*C.D3D11_TEXTURE2D_DESC)(desc), C.uint(miscFlags), (**C.ovrTexture)(unsafe.Pointer(&cTexture)))
+	result := C.ovr_CreateMirrorTextureD3D11(hmd.cSession, (*C.ID3D11Device)(device), (*C.D3D11_TEXTURE2D_DESC)(desc), C.uint(miscFlags), (**C.ovrTexture)(unsafe.Pointer(&cTexture)))
 	err := errorForResult(result)
 	if err != nil {
 		return nil, err

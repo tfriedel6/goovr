@@ -3,9 +3,9 @@
 package goovr
 
 import (
-	"unsafe"
 	"errors"
 	"time"
+	"unsafe"
 )
 
 var notAvailableErr = errors.New("OVR not available on this platform")
@@ -63,7 +63,7 @@ type FovPort struct {
 type HmdType int32
 
 const (
-	Hmd_None    HmdType = iota
+	Hmd_None HmdType = iota
 	Hmd_DK1
 	Hmd_DKHD
 	Hmd_DK2
@@ -71,12 +71,13 @@ const (
 	Hmd_Other
 	Hmd_E3_2015
 	Hmd_ES06
+	Hmd_ES09
 )
 
 type HmdCaps int32
 
 const (
-	HmdCap_DebugDevice   HmdCaps = iota
+	HmdCap_DebugDevice HmdCaps = iota
 	HmdCap_Writable_Mask
 	HmdCap_Service_Mask
 )
@@ -86,7 +87,7 @@ const (
 type TrackingCaps int32
 
 const (
-	TrackingCap_Orientation      TrackingCaps = iota
+	TrackingCap_Orientation TrackingCaps = iota
 	TrackingCap_MagYawCorrection
 	TrackingCap_Position
 	TrackingCap_Idle
@@ -98,7 +99,7 @@ const (
 type EyeType int32
 
 const (
-	Eye_Left  EyeType = iota
+	Eye_Left EyeType = iota
 	Eye_Right
 	Eye_Count
 )
@@ -108,7 +109,7 @@ type GraphicsLuid struct {
 }
 
 // This is a complete descriptor of the HMD.
-type Hmd struct {
+type Session struct {
 	Type                       HmdType
 	ProductName                string
 	Manufacturer               string
@@ -153,17 +154,11 @@ type TrackingState struct {
 	HeadPose               PoseStatef
 	CameraPose             Posef
 	LeveledCameraPose      Posef
-	HandPoses [2]PoseStatef
+	HandPoses              [2]PoseStatef
 	RawSensorData          SensorData
 	StatusFlags            StatusBits
+	HandStatusFlags        [2]StatusBits
 	LastCameraFrameCounter uint32
-}
-
-type FrameTiming struct {
-	DisplayMidpointSeconds float64
-	FrameIntervalSeconds   float64
-	AppFrameIndex          float64
-	DisplayFrameIndex      float64
 }
 
 type EyeRenderDesc struct {
@@ -188,7 +183,7 @@ type ViewScaleDesc struct {
 type RenderAPIType int32
 
 const (
-	RenderAPI_None           RenderAPIType = iota
+	RenderAPI_None RenderAPIType = iota
 	RenderAPI_OpenGL
 	RenderAPI_Android_GLES
 	RenderAPI_D3D11
@@ -201,14 +196,14 @@ type TextureHeader struct {
 }
 
 type Texture struct {
-	Header   TextureHeader
-	OGL      *GLTextureData
-	D3D11    *D3D11TextureData
+	Header TextureHeader
+	OGL    *GLTextureData
+	D3D11  *D3D11TextureData
 }
 
 type SwapTextureSet struct {
-	Textures        []Texture
-	TextureCount    int
+	Textures     []Texture
+	TextureCount int
 }
 
 func (s *SwapTextureSet) SetCurrentIndex(value int) {
@@ -237,12 +232,14 @@ const (
 	Button_Right
 	Button_Enter
 	Button_Back
+
+	Button_Private
 )
 
 type Touch int
 
 const (
-	Touch_A             Touch = iota
+	Touch_A Touch = iota
 	Touch_B
 	Touch_RThumb
 	Touch_RIndexTrigger
@@ -257,28 +254,38 @@ const (
 	Touch_LThumbUp
 )
 
+type ControllerType int
+
+const (
+	ControllerType_None ControllerType = iota
+	ControllerType_LTouch
+	ControllerType_RTouch
+	ControllerType_Touch
+	ControllerType_XBox
+	ControllerType_All
+)
+
 type HandType int
 
 const (
-	Hand_Left  HandType = iota
+	Hand_Left HandType = iota
 	Hand_Right
 )
 
 type InputState struct {
-	TimeInSeconds float64
+	TimeInSeconds            float64
 	ConnectedControllerTypes uint
-	Buttons Button
-	Touches Touch
-	IndexTrigger [2]float32
-	HandTrigger [2]float32
-	Thumbstick [2]Vector2f
+	Buttons                  Button
+	Touches                  Touch
+	IndexTrigger             [2]float32
+	HandTrigger              [2]float32
+	Thumbstick               [2]Vector2f
 }
 
 type InitFlags int32
 
 const (
-	Init_Debug          InitFlags = iota
-	Init_ServerOptional
+	Init_Debug InitFlags = iota
 	Init_RequestVersion
 	Init_ForceNoDebug
 )
@@ -297,7 +304,7 @@ type InitParams struct {
 	Flags                 InitFlags
 	RequestedMinorVersion uint32
 	LogCallback           LogCallback
-	UserData uintptr
+	UserData              uintptr
 	ConnectionTimeoutMS   uint32
 }
 
@@ -325,55 +332,69 @@ func TraceMessage(level int, message string) (int, error) {
 	return 0, nil
 }
 
-func Hmd_Create(pLuid *GraphicsLuid) (*Hmd, error) {
+func Create(pLuid *GraphicsLuid) (*Session, error) {
 	return nil, notAvailableErr
 }
 
-func (hmd *Hmd) Destroy() {
+func (hmd *Session) Destroy() {
 }
 
-func (hmd *Hmd) GetEnabledCaps() HmdCaps {
+type SessionStatus struct {
+	HasVrFocus bool
+	HmdPresent bool
+}
+
+func (hmd *Session) GetSessionStatus() (SessionStatus, error) {
+	return SessionStatus{}, nil
+}
+
+func (hmd *Session) GetEnabledCaps() HmdCaps {
 	return 0
 }
 
-func (hmd *Hmd) SetEnabledCaps(hmdCaps HmdCaps) {
+func (hmd *Session) SetEnabledCaps(hmdCaps HmdCaps) {
 }
 
-func (hmd *Hmd) ConfigureTracking(supportedTrackingCaps, requiredTrackingCaps TrackingCaps) error {
+func (hmd *Session) GetTrackingCaps() TrackingCaps {
+	return 0
+}
+
+func (hmd *Session) ConfigureTracking(supportedTrackingCaps, requiredTrackingCaps TrackingCaps) error {
 	return notAvailableErr
 }
 
-func (hmd *Hmd) RecenterPose() {
+func (hmd *Session) RecenterPose() {
 }
 
-func (hmd *Hmd) GetTrackingState(absTime float64) TrackingState {
+func (hmd *Session) GetTrackingState(absTime float64, latencyMarker bool) TrackingState {
 	return TrackingState{}
 }
 
-func (hmd *Hmd) GetInputState(controllerTypeMask uint) (InputState, error) {
+func (hmd *Session) GetInputState(controllerTypeMask uint) (InputState, error) {
 	return InputState{}, nil
 }
 
-func (hmd *Hmd) SetControllerVibration(controllerTypeMask uint, frequency, amplitude float32) error {
+func (hmd *Session) SetControllerVibration(controllerTypeMask uint, frequency, amplitude float32) error {
 	return nil
 }
 
 type LayerType int32
 
 const (
-	LayerType_Disabled       LayerType = iota
+	LayerType_Disabled LayerType = iota
 	LayerType_EyeFov
 	LayerType_EyeFovDepth
-	LayerType_QuadInWorld
-	LayerType_QuadHeadLocked
+	LayerType_Quad
+	LayerType_EyeMatrix
 	LayerType_Direct
 )
 
 type LayerFlags int32
 
 const (
-	LayerFlag_HighQuality               LayerFlags = iota
+	LayerFlag_HighQuality LayerFlags = iota
 	LayerFlag_TextureOriginAtBottomLeft
+	LayerFlag_HeadLocked
 )
 
 type LayerHeader struct {
@@ -386,11 +407,12 @@ type LayerInterface interface {
 }
 
 type LayerEyeFov struct {
-	Header       LayerHeader
-	ColorTexture [Eye_Count]*SwapTextureSet
-	Viewport     [Eye_Count]Recti
-	Fov          [Eye_Count]FovPort
-	RenderPose   [Eye_Count]Posef
+	Header           LayerHeader
+	ColorTexture     [Eye_Count]*SwapTextureSet
+	Viewport         [Eye_Count]Recti
+	Fov              [Eye_Count]FovPort
+	RenderPose       [Eye_Count]Posef
+	SensorSampleTime float64
 }
 
 func (l *LayerEyeFov) ptr() unsafe.Pointer {
@@ -398,16 +420,30 @@ func (l *LayerEyeFov) ptr() unsafe.Pointer {
 }
 
 type LayerEyeFovDepth struct {
-	Header         LayerHeader
-	ColorTexture   [Eye_Count]*SwapTextureSet
-	Viewport       [Eye_Count]Recti
-	Fov            [Eye_Count]FovPort
-	RenderPose     [Eye_Count]Posef
-	DepthTexture   [Eye_Count]*SwapTextureSet
-	ProjectionDesc TimewarpProjectionDesc
+	Header           LayerHeader
+	ColorTexture     [Eye_Count]*SwapTextureSet
+	Viewport         [Eye_Count]Recti
+	Fov              [Eye_Count]FovPort
+	RenderPose       [Eye_Count]Posef
+	SensorSampleTime float64
+	DepthTexture     [Eye_Count]*SwapTextureSet
+	ProjectionDesc   TimewarpProjectionDesc
 }
 
 func (l *LayerEyeFovDepth) ptr() unsafe.Pointer {
+	return nil
+}
+
+type LayerEyeMatrix struct {
+	Header           LayerHeader
+	ColorTexture     [Eye_Count]*SwapTextureSet
+	Viewport         [Eye_Count]Recti
+	RenderPose       [Eye_Count]Posef
+	Matrix           [Eye_Count]Matrix4f
+	SensorSampleTime float64
+}
+
+func (l *LayerEyeMatrix) ptr() unsafe.Pointer {
 	return nil
 }
 
@@ -433,71 +469,103 @@ func (l *LayerDirect) ptr() unsafe.Pointer {
 	return nil
 }
 
-func (hmd *Hmd) DestroySwapTextureSet(textureSet *SwapTextureSet) {
+func (hmd *Session) DestroySwapTextureSet(textureSet *SwapTextureSet) {
 }
 
-func (hmd *Hmd) DestroyMirrorTexture(mirrorTexture *Texture) {
+func (hmd *Session) DestroyMirrorTexture(mirrorTexture *Texture) {
 }
 
-func (hmd *Hmd) GetFovTextureSize(eye EyeType, fov FovPort, pixelsPerDisplayPixel float32) Sizei {
+func (hmd *Session) GetFovTextureSize(eye EyeType, fov FovPort, pixelsPerDisplayPixel float32) Sizei {
 	return Sizei{}
 }
 
-func (hmd *Hmd) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
+func (hmd *Session) GetRenderDesc(eye EyeType, fov FovPort) EyeRenderDesc {
 	return EyeRenderDesc{}
 }
 
-func (hmd *Hmd) SubmitFrame(frameIndex uint, viewScaleDesc *ViewScaleDesc, layers []LayerInterface) (bool, error) {
+func (hmd *Session) SubmitFrame(frameIndex uint, viewScaleDesc *ViewScaleDesc, layers []LayerInterface) (bool, error) {
 	return false, notAvailableErr
 }
 
-func (hmd *Hmd) GetFrameTiming(frameIndex uint) FrameTiming {
-	return FrameTiming{}
+func (hmd *Session) GetPredictedDisplayTime(frameIndex uint64) float64 {
+	return 0
 }
 
-func (hmd *Hmd) ResetFrameTiming(frameIndex uint) {
+func (hmd *Session) ResetFrameTiming(frameIndex uint) {
 }
 
 func GetTimeInSeconds() float64 {
 	return float64(time.Now().UnixNano()) / 1000000000
 }
 
-func (hmd *Hmd) GetBool(propertyName string, defaultVal bool) bool {
+type PerfHudMode int
+
+const (
+	PerfHud_Off PerfHudMode = iota
+	PerfHud_LatencyTiming
+	PerfHud_RenderTiming
+	PerfHud_PerfHeadroom
+	PerfHud_VersionInfo
+)
+
+type LayerHudMode int
+
+const (
+	LayerHud_Off LayerHudMode = iota
+	LayerHud_Info
+)
+
+type DebugHudStereoMode int
+
+const (
+	DebugHudStereo_Off DebugHudStereoMode = iota
+	DebugHudStereo_Quad
+	DebugHudStereo_QuadWithCrosshair
+	DebugHudStereo_CrosshairAtInfinity
+)
+
+func (hmd *Session) ResetBackOfHeadTracking() {
+}
+
+func (hmd *Session) ResetMulticameraTracking() {
+}
+
+func (hmd *Session) GetBool(propertyName string, defaultVal bool) bool {
 	return false
 }
 
-func (hmd *Hmd) SetBool(propertyName string, value bool) error {
+func (hmd *Session) SetBool(propertyName string, value bool) error {
 	return notAvailableErr
 }
 
-func (hmd *Hmd) GetInt(propertyName string, defaultVal int) int {
+func (hmd *Session) GetInt(propertyName string, defaultVal int) int {
 	return 0
 }
 
-func (hmd *Hmd) SetInt(propertyName string, value int) error {
+func (hmd *Session) SetInt(propertyName string, value int) error {
 	return notAvailableErr
 }
 
-func (hmd *Hmd) GetFloat(propertyName string, defaultVal float32) float32 {
+func (hmd *Session) GetFloat(propertyName string, defaultVal float32) float32 {
 	return 0
 }
 
-func (hmd *Hmd) SetFloat(propertyName string, value float32) error {
+func (hmd *Session) SetFloat(propertyName string, value float32) error {
 	return notAvailableErr
 }
 
-func (hmd *Hmd) GetFloatArray(propertyName string, valuesCapacity uint) []float32 {
+func (hmd *Session) GetFloatArray(propertyName string, valuesCapacity uint) []float32 {
 	return []float32{}
 }
 
-func (hmd *Hmd) SetFloatArray(propertyName string, values []float32) error {
+func (hmd *Session) SetFloatArray(propertyName string, values []float32) error {
 	return notAvailableErr
 }
 
-func (hmd *Hmd) GetString(propertyName string, defaultVal string) string {
+func (hmd *Session) GetString(propertyName string, defaultVal string) string {
 	return ""
 }
 
-func (hmd *Hmd) SetString(propertyName string, value string) error {
+func (hmd *Session) SetString(propertyName string, value string) error {
 	return notAvailableErr
 }

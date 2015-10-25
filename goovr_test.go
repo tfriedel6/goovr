@@ -32,7 +32,7 @@ func TestCreateFirstHMD(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
 
-	hmd, err := goovr.Hmd_Create(nil)
+	hmd, err := goovr.Create(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestTracking(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
 
-	hmd, err := goovr.Hmd_Create(nil)
+	hmd, err := goovr.Create(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,25 +57,25 @@ func TestTracking(t *testing.T) {
 	}
 
 	time.Sleep(100 * time.Millisecond)
-	state := hmd.GetTrackingState(0)
+	state := hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 	time.Sleep(100 * time.Millisecond)
-	state = hmd.GetTrackingState(0)
+	state = hmd.GetTrackingState(0, false)
 	fmt.Printf("%#v\n", state)
 }
 
@@ -84,7 +84,7 @@ func TestProperties(t *testing.T) {
 	ovrInit(t)
 	defer ovrShutdown()
 
-	hmd, err := goovr.Hmd_Create(0)
+	hmd, err := goovr.Create(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

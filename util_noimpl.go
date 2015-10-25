@@ -12,6 +12,15 @@ const (
 	Projection_ClipRangeOpenGL
 )
 
+type DetectResult struct {
+	IsOculusServiceRunning bool
+	IsOculusHMDConnected   bool
+}
+
+func Detect(timeoutMsec int) DetectResult {
+	return DetectResult{}
+}
+
 func Matrix4f_Projection(fov FovPort, znear, zfar float32, projectionModFlags ProjectionModifier) Matrix4f {
 	return Matrix4f{}
 }
@@ -28,6 +37,6 @@ func CalcEyePoses(headPose Posef, hmdToEyeViewOffset [2]Vector3f) [2]Posef {
 	return [2]Posef{Posef{}, Posef{}}
 }
 
-func (hmd *Hmd) GetEyePoses(frameIndex uint, hmdToEyeViewOffset [2]Vector3f) ([2]Posef, TrackingState) {
+func (hmd *Session) GetEyePoses(frameIndex uint64, latencyMarker bool, hmdToEyeViewOffset [2]Vector3f) ([2]Posef, TrackingState) {
 	return [2]Posef{Posef{}, Posef{}}, TrackingState{}
 }

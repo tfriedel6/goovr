@@ -13,10 +13,10 @@ type GLTextureData struct {
 
 // Creates a Texture Set suitable for use with OpenGL.
 //
-// Multiple calls to ovr_CreateSwapTextureSetD3D11 for the same ovrHmd is supported, but applications
+// Multiple calls to ovr_CreateSwapTextureSetD3D11 for the same ovrHmd are supported, but applications
 // cannot rely on switching between ovrSwapTextureSets at runtime without a performance penalty.
 //
-// \param[in]  hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
 // \param[in]  format Specifies the texture format.
 // \param[in]  width Specifies the requested texture width.
 // \param[in]  height Specifies the requested texture height.
@@ -35,9 +35,9 @@ type GLTextureData struct {
 // to apply incorrect gamma conversions leading to gamma-curve artifacts.
 //
 // \see ovr_DestroySwapTextureSet
-func (hmd *Hmd) CreateSwapTextureSetGL(format uint, width, height int) (*SwapTextureSet, error) {
+func (hmd *Session) CreateSwapTextureSetGL(format uint, width, height int) (*SwapTextureSet, error) {
 	var cSet *C.ovrSwapTextureSet
-	result := C.ovr_CreateSwapTextureSetGL(hmd.cHmd, C.GLuint(format), C.int(width), C.int(height), &cSet)
+	result := C.ovr_CreateSwapTextureSetGL(hmd.cSession, C.GLuint(format), C.int(width), C.int(height), &cSet)
 	err := errorForResult(result)
 	if err != nil {
 		return nil, err
@@ -62,10 +62,10 @@ func (hmd *Hmd) CreateSwapTextureSetGL(format uint, width, height int) (*SwapTex
 
 // Creates a Mirror Texture which is auto-refreshed to mirror Rift contents produced by this application.
 //
-// A second call to ovr_CreateMirrorTextureGL for a given ovrHmd  before destroying the first one
+// A second call to ovr_CreateMirrorTextureGL for a given ovrHmd before destroying the first one
 // is not supported and will result in an error return.
 //
-// \param[in]  hmd Specifies an ovrHmd previously returned by ovr_Create.
+// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
 // \param[in]  format Specifies the texture format.
 // \param[in]  width Specifies the requested texture width.
 // \param[in]  height Specifies the requested texture height.
@@ -82,9 +82,9 @@ func (hmd *Hmd) CreateSwapTextureSetGL(format uint, width, height int) (*SwapTex
 // Failure to do so can result in incorrect gamma conversions leading to gamma-curve artifacts and color banding.
 //
 // \see ovr_DestroyMirrorTexture
-func (hmd *Hmd) CreateMirrorTextureGL(format uint, width, height int) (*Texture, error) {
+func (hmd *Session) CreateMirrorTextureGL(format uint, width, height int) (*Texture, error) {
 	var cTexture *C.union_ovrGLTexture
-	result := C.ovr_CreateMirrorTextureGL(hmd.cHmd, C.GLuint(format), C.int(width), C.int(height), (**C.ovrTexture)(unsafe.Pointer(&cTexture)))
+	result := C.ovr_CreateMirrorTextureGL(hmd.cSession, C.GLuint(format), C.int(width), C.int(height), (**C.ovrTexture)(unsafe.Pointer(&cTexture)))
 	err := errorForResult(result)
 	if err != nil {
 		return nil, err
