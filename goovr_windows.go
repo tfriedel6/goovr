@@ -7,6 +7,8 @@ package goovr
 #include "OVR_CAPI.h"
 
 int logCallback_cgo(uintptr_t userData, int level, const char* message);
+
+ovrLayerHeader *layerBuffer[65536];
 */
 import "C"
 import (
@@ -1524,14 +1526,10 @@ func (hmd *Session) SubmitFrame(frameIndex uint64, viewScaleDesc *ViewScaleDesc,
 	}
 
 	layerCount := len(layers)
-	if cLayers == nil || cap(cLayers) < layerCount {
-		cLayers = make([]*C.ovrLayerHeader, 0, layerCount*2)
-	}
-	cLayers = cLayers[:0]
 	for i := 0; i < layerCount; i++ {
-		cLayers = append(cLayers, layers[i].ptr())
+		C.layerBuffer[i] = layers[i].ptr()
 	}
-	result := C.ovr_SubmitFrame(hmd.cSession, C.longlong(frameIndex), cViewScaleDescPtr, &cLayers[0], C.uint(layerCount))
+	result := C.ovr_SubmitFrame(hmd.cSession, C.longlong(frameIndex), cViewScaleDescPtr, &(C.layerBuffer[0]), C.uint(layerCount))
 
 	if result == C.ovrSuccess_NotVisible {
 		return false, nil
@@ -1542,9 +1540,6 @@ func (hmd *Session) SubmitFrame(frameIndex uint64, viewScaleDesc *ViewScaleDesc,
 	}
 	return true, nil
 }
-
-// This is used in SubmitFrame to pass the layers to C. Having a package variable avoids allocating memory on every call.
-var cLayers []*C.ovrLayerHeader
 
 //-------------------------------------------------------------------------------------
 // @name Frame Timing
