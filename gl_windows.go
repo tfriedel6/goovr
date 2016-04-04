@@ -1,98 +1,124 @@
 package goovr
 
 // #include "OVR_CAPI_GL.h"
-// ovrTexture* getTexturePointerFromArray(ovrTexture* textures, int index);
 import "C"
-import (
-	"unsafe"
-)
 
-type GLTextureData struct {
-	TexId C.GLuint
-}
-
-// Creates a Texture Set suitable for use with OpenGL.
-//
-// Multiple calls to ovr_CreateSwapTextureSetD3D11 for the same ovrHmd are supported, but applications
-// cannot rely on switching between ovrSwapTextureSets at runtime without a performance penalty.
-//
-// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
-// \param[in]  format Specifies the texture format.
-// \param[in]  width Specifies the requested texture width.
-// \param[in]  height Specifies the requested texture height.
-// \param[out] outTextureSet Specifies the created ovrSwapTextureSet, which will be valid upon a successful return value, else it will be NULL.
-//             This texture set must be eventually destroyed via ovr_DestroySwapTextureSet before destroying the HMD with ovr_Destroy.
-//
-// \return Returns an ovrResult indicating success or failure. In the case of failure, use
-//         ovr_GetLastErrorInfo to get more information.
-//
-// \note The \a format provided should be thought of as the format the distortion compositor will use when reading the contents of the
-// texture. To that end, it is highly recommended that the application requests swap-texture-set formats that are in sRGB-space (e.g. GL_SRGB_ALPHA8)
-// as the distortion compositor does sRGB-correct rendering. Furthermore, the app should then make sure "glEnable(GL_FRAMEBUFFER_SRGB);"
-// is called before rendering into these textures. Even though it is not recommended, if the application would like to treat the
-// texture as a linear format and do linear-to-gamma conversion in GLSL, then the application can avoid calling "glEnable(GL_FRAMEBUFFER_SRGB);",
-// but should still pass in GL_SRGB_ALPHA8 (not GL_RGBA) for the \a format. Failure to do so will cause the distortion compositor
-// to apply incorrect gamma conversions leading to gamma-curve artifacts.
-//
-// \see ovr_DestroySwapTextureSet
-func (hmd *Session) CreateSwapTextureSetGL(format uint, width, height int) (*SwapTextureSet, error) {
-	var cSet *C.ovrSwapTextureSet
-	result := C.ovr_CreateSwapTextureSetGL(hmd.cSession, C.GLuint(format), C.int(width), C.int(height), &cSet)
+/// Creates a TextureSwapChain suitable for use with OpenGL.
+///
+/// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
+/// \param[in]  desc Specifies the requested texture properties. See notes for more info about texture format.
+/// \param[out] out_TextureSwapChain Returns the created ovrTextureSwapChain, which will be valid upon
+///             a successful return value, else it will be NULL. This texture swap chain must be eventually
+///             destroyed via ovr_DestroyTextureSwapChain before destroying the HMD with ovr_Destroy.
+///
+/// \return Returns an ovrResult indicating success or failure. In the case of failure, use
+///         ovr_GetLastErrorInfo to get more information.
+///
+/// \note The \a format provided should be thought of as the format the distortion compositor will use when reading
+/// the contents of the texture. To that end, it is highly recommended that the application requests texture swap chain
+/// formats that are in sRGB-space (e.g. OVR_FORMAT_R8G8B8A8_UNORM_SRGB) as the distortion compositor does sRGB-correct
+/// rendering. Furthermore, the app should then make sure "glEnable(GL_FRAMEBUFFER_SRGB);" is called before rendering
+/// into these textures. Even though it is not recommended, if the application would like to treat the texture as a linear
+/// format and do linear-to-gamma conversion in GLSL, then the application can avoid calling "glEnable(GL_FRAMEBUFFER_SRGB);",
+/// but should still pass in an sRGB variant for the \a format. Failure to do so will cause the distortion compositor
+/// to apply incorrect gamma conversions leading to gamma-curve artifacts.
+///
+/// \see ovr_GetTextureSwapChainLength
+/// \see ovr_GetTextureSwapChainCurrentIndex
+/// \see ovr_GetTextureSwapChainDesc
+/// \see ovr_GetTextureSwapChainBufferGL
+/// \see ovr_DestroyTextureSwapChain
+func (s *Session) CreateTextureSwapChainGL(desc *TextureSwapChainDesc) (TextureSwapChain, error) {
+	var cDesc C.ovrTextureSwapChainDesc
+	cDesc.Type = C.ovrTextureType(desc.Typ)
+	cDesc.Format = C.ovrTextureFormat(desc.Format)
+	cDesc.ArraySize = C.int(desc.ArraySize)
+	cDesc.Width = C.int(desc.Width)
+	cDesc.Height = C.int(desc.Height)
+	cDesc.MipLevels = C.int(desc.MipLevels)
+	cDesc.SampleCount = C.int(desc.SampleCount)
+	cDesc.StaticImage = ovrBool(desc.StaticImage)
+	cDesc.MiscFlags = C.uint(desc.MiscFlags)
+	cDesc.BindFlags = C.uint(desc.BindFlags)
+	var cSwapTextureChain C.ovrTextureSwapChain
+	result := C.ovr_CreateTextureSwapChainGL(s.cSession, &cDesc, &cSwapTextureChain)
 	err := errorForResult(result)
 	if err != nil {
-		return nil, err
+		return TextureSwapChain{}, err
 	}
-
-	textureCount := int(cSet.TextureCount)
-	textures := make([]Texture, textureCount)
-	for i := 0; i < textureCount; i++ {
-		var texture *C.ovrTexture = C.getTexturePointerFromArray(cSet.Textures, C.int(i))
-		textures[i] = Texture{
-			Header: TextureHeader{
-				API:         RenderAPIType(texture.Header.API),
-				TextureSize: goSizei(texture.Header.TextureSize)},
-			cTexture: texture,
-			OGL: &GLTextureData{TexId: (*C.ovrGLTextureData)(unsafe.Pointer(texture)).TexId}}
-	}
-	return &SwapTextureSet{
-		cSwapTextureSet: cSet,
-		Textures:        textures,
-		TextureCount:    textureCount}, nil
+	return TextureSwapChain{cTextureSwapChain: cSwapTextureChain}, nil
 }
 
-// Creates a Mirror Texture which is auto-refreshed to mirror Rift contents produced by this application.
-//
-// A second call to ovr_CreateMirrorTextureGL for a given ovrHmd before destroying the first one
-// is not supported and will result in an error return.
-//
-// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
-// \param[in]  format Specifies the texture format.
-// \param[in]  width Specifies the requested texture width.
-// \param[in]  height Specifies the requested texture height.
-// \param[out] outMirrorTexture Specifies the created ovrSwapTexture, which will be valid upon a successful return value, else it will be NULL.
-//             This texture must be eventually destroyed via ovr_DestroyMirrorTexture before destroying the HMD with ovr_Destroy.
-//
-// \return Returns an ovrResult indicating success or failure. In the case of failure, use
-//         ovr_GetLastErrorInfo to get more information.
-//
-// \note The \a format provided should be thought of as the format the distortion compositor will use when writing into the mirror
-// texture. It is highly recommended that mirror textures are requested as GL_SRGB_ALPHA8 because the distortion compositor
-// does sRGB-correct rendering. If the application requests a non-sRGB format (e.g. GL_RGBA) as the mirror texture,
-// then the application might have to apply a manual linear-to-gamma conversion when reading from the mirror texture.
-// Failure to do so can result in incorrect gamma conversions leading to gamma-curve artifacts and color banding.
-//
-// \see ovr_DestroyMirrorTexture
-func (hmd *Session) CreateMirrorTextureGL(format uint, width, height int) (*Texture, error) {
-	var cTexture *C.union_ovrGLTexture
-	result := C.ovr_CreateMirrorTextureGL(hmd.cSession, C.GLuint(format), C.int(width), C.int(height), (**C.ovrTexture)(unsafe.Pointer(&cTexture)))
+/// Get a specific buffer within the chain as a GL texture name
+///
+/// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
+/// \param[in]  chain Specifies an ovrTextureSwapChain previously returned by ovr_CreateTextureSwapChainGL
+/// \param[in]  index Specifies the index within the chain to retrieve. Must be between 0 and length (see ovr_GetTextureSwapChainLength)
+///             or may pass -1 to get the buffer at the CurrentIndex location. (Saving a call to GetTextureSwapChainCurrentIndex)
+/// \param[out] out_TexId Returns the GL texture object name associated with the specific index requested
+///
+/// \return Returns an ovrResult indicating success or failure. In the case of failure, use
+///         ovr_GetLastErrorInfo to get more information.
+func (s *Session) GetTextureSwapChainBufferGL(chain TextureSwapChain, index int) (uint, error) {
+	var texId C.uint
+	result := C.ovr_GetTextureSwapChainBufferGL(s.cSession, chain.cTextureSwapChain, C.int(index), &texId)
 	err := errorForResult(result)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	return &Texture{
-		Header: TextureHeader{
-			API:         RenderAPIType((*C.ovrTexture)(unsafe.Pointer(cTexture)).Header.API),
-			TextureSize: goSizei((*C.ovrTexture)(unsafe.Pointer(cTexture)).Header.TextureSize)},
-		cTexture: (*C.ovrTexture)(unsafe.Pointer(cTexture)),
-		OGL:      &GLTextureData{TexId: (*C.ovrGLTextureData)(unsafe.Pointer(cTexture)).TexId}}, nil
+	return uint(texId), nil
+}
+
+/// Creates a Mirror Texture which is auto-refreshed to mirror Rift contents produced by this application.
+///
+/// A second call to ovr_CreateMirrorTextureGL for a given ovrSession before destroying the first one
+/// is not supported and will result in an error return.
+///
+/// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
+/// \param[in]  desc Specifies the requested mirror texture description.
+/// \param[out] out_MirrorTexture Specifies the created ovrMirrorTexture, which will be valid upon a successful return value, else it will be NULL.
+///             This texture must be eventually destroyed via ovr_DestroyMirrorTexture before destroying the HMD with ovr_Destroy.
+///
+/// \return Returns an ovrResult indicating success or failure. In the case of failure, use
+///         ovr_GetLastErrorInfo to get more information.
+///
+/// \note The \a format provided should be thought of as the format the distortion compositor will use when writing into the mirror
+/// texture. It is highly recommended that mirror textures are requested as sRGB formats because the distortion compositor
+/// does sRGB-correct rendering. If the application requests a non-sRGB format (e.g. R8G8B8A8_UNORM) as the mirror texture,
+/// then the application might have to apply a manual linear-to-gamma conversion when reading from the mirror texture.
+/// Failure to do so can result in incorrect gamma conversions leading to gamma-curve artifacts and color banding.
+///
+/// \see ovr_GetMirrorTextureBufferGL
+/// \see ovr_DestroyMirrorTexture
+func (s *Session) CreateMirrorTextureGL(desc *TextureSwapChainDesc) (MirrorTexture, error) {
+	var cDesc C.ovrMirrorTextureDesc
+	cDesc.Format = C.ovrTextureFormat(desc.Format)
+	cDesc.Width = C.int(desc.Width)
+	cDesc.Height = C.int(desc.Height)
+	cDesc.MiscFlags = C.uint(desc.MiscFlags)
+	var cMirrorTexture C.ovrMirrorTexture
+	result := C.ovr_CreateMirrorTextureGL(s.cSession, &cDesc, &cMirrorTexture)
+	err := errorForResult(result)
+	if err != nil {
+		return MirrorTexture{}, err
+	}
+	return MirrorTexture{cMirrorTexture: cMirrorTexture}, nil
+}
+
+/// Get a the underlying buffer as a GL texture name
+///
+/// \param[in]  session Specifies an ovrSession previously returned by ovr_Create.
+/// \param[in]  mirrorTexture Specifies an ovrMirrorTexture previously returned by ovr_CreateMirrorTextureGL
+/// \param[out] out_TexId Specifies the GL texture object name associated with the mirror texture
+///
+/// \return Returns an ovrResult indicating success or failure. In the case of failure, use
+///         ovr_GetLastErrorInfo to get more information.
+func (s *Session) GetMirrorTextureBufferGL(mirrorTexture MirrorTexture) (uint, error) {
+	var texId C.uint
+	result := C.ovr_GetMirrorTextureBufferGL(s.cSession, mirrorTexture.cMirrorTexture, &texId)
+	err := errorForResult(result)
+	if err != nil {
+		return 0, err
+	}
+	return uint(texId), nil
 }

@@ -6,7 +6,3 @@ int logCallback_cgo(uintptr_t userData, int level, const char* message) {
     logCallback(level, message);
     return 0;
 }
-
-ovrTexture* getTexturePointerFromArray(ovrTexture* textures, int index) {
-    return &textures[index];
-}
